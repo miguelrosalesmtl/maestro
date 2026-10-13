@@ -35,7 +35,7 @@ jobs:
       - run: wails build -platform darwin/universal -clean
       - name: Zip app bundle
         run: ditto -c -k --keepParent build/bin/Maestro.app Maestro-macos-universal.zip
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: Maestro-macos-universal
           path: Maestro-macos-universal.zip
@@ -55,7 +55,7 @@ jobs:
       - name: App tests (end-to-end against a fake Jira)
         run: go test -tags webkit2_41 -count=1 .
       - run: tar -czf Maestro-linux-amd64.tar.gz -C build/bin maestro
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v6
         with:
           name: Maestro-linux-amd64
           path: Maestro-linux-amd64.tar.gz
@@ -65,7 +65,7 @@ jobs:
     needs: [macos, linux]
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v6
         with: { merge-multiple: true }
       - uses: softprops/action-gh-release@v2
         with:
