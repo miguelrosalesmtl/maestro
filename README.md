@@ -4,7 +4,93 @@ Your Jira tickets, conducted. A desktop app (Go + [Wails](https://wails.io)) tha
 ticket and the code in one place: start work on a ticket, and its branch, commits, PR and
 merge move the Jira status for you — with a real terminal bound to each ticket.
 
-> **Status:** live Jira sync over the REST API (log in once with `maestro-jira login`); without a login the app shows demo data. GitHub integration comes next.
+> **Status:** live Jira sync over the REST API and GitHub pull request tracking. Without a
+> Jira login the app shows demo data. Not yet tried against a real Jira site: expect rough edges,
+> and send the log file (see [Logs and crashes](#logs-and-crashes)) when something fails.
+
+## Install and try it
+
+You need: a Jira site where you can create an API token, and (for pull requests) a GitHub
+account with access to your repositories. The one-time Jira login uses the `maestro-jira`
+command-line tool, which is not in the download yet, so Go is needed for that step.
+
+### macOS
+
+**1. Get the app.** Every push builds a universal app (Apple Silicon and Intel).
+
+- In the browser: [Actions](https://github.com/miguelrosalesmtl/maestro/actions) → the latest
+  green **build** run → *Artifacts* → **Maestro-macos-universal**, or
+- with the GitHub CLI: `gh run download -R miguelrosalesmtl/maestro -n Maestro-macos-universal`
+  (latest run).
+
+```sh
+unzip Maestro-macos-universal.zip            # skip if the browser already unzipped it
+mv Maestro.app /Applications/
+xattr -dr com.apple.quarantine /Applications/Maestro.app
+```
+
+The app is not signed yet. Without the `xattr` line, macOS says it "can't be opened"; you can
+also right-click the app → **Open** → **Open** once. Downloads from Actions expire after 90 days.
+
+**2. Install the tools and get the code** (for the login tool):
+
+```sh
+brew install go gh
+gh auth login                                # lets Maestro read your pull requests
+git clone https://github.com/miguelrosalesmtl/maestro.git
+cd maestro
+```
+
+**3. Connect Jira** (once):
+
+```sh
+go run ./cmd/maestro-jira login              # asks for your site, email and API token
+go run ./cmd/maestro-jira discover -apply    # reads your projects, statuses and fields into the config
+```
+
+For Jira Cloud, create the token at
+<https://id.atlassian.com/manage-profile/security/api-tokens>; for Data Center, use a personal
+access token (Jira → Profile → Personal Access Tokens). The token is stored in the macOS
+Keychain, never in a file. The config is written to
+`~/Library/Application Support/maestro/config.yaml`.
+
+**4. Add your repositories** to that file, under each project, so Maestro follows their pull
+requests and opens ticket terminals in the right folder:
+
+```yaml
+projects:
+  - key: ABC
+    repos:
+      - name: your-org/your-repo             # owner/name on GitHub
+        path: ~/code/your-repo               # your local clone
+```
+
+Then check everything:
+
+```sh
+go run ./cmd/maestro-jira check              # Jira token, permissions, config vs. Jira, GitHub, each repo
+```
+
+**5. Open Maestro** from Applications. The sidebar shows **Jira · your-site** and
+**GitHub · @you** (or says why one is not connected). Logs are in `~/Library/Logs/Maestro/`.
+
+To update later: download the newest build, replace `/Applications/Maestro.app`, and run the
+`xattr` line again. Your config and Keychain token stay.
+
+### Linux
+
+Download **Maestro-linux-amd64** from the same Actions run (or build it: see
+[Develop](#develop)). It needs GTK 3 and WebKitGTK 4.1:
+
+```sh
+sudo pacman -S gtk3 webkit2gtk-4.1                     # Arch / Omarchy
+sudo apt install libgtk-3-0 libwebkit2gtk-4.1-0        # Debian / Ubuntu
+tar -xzf Maestro-linux-amd64.tar.gz && ./maestro
+```
+
+Steps 2–4 are the same as on macOS (`go` and `gh` from your package manager). The config is in
+`~/.config/maestro/config.yaml`, the token in the Secret Service keyring (GNOME Keyring,
+KWallet…), and logs in `~/.local/state/maestro/logs/`.
 
 ## Views
 
@@ -61,8 +147,9 @@ plus their epics/initiatives), polled every 60 s (15 s right after you change so
 status changes use real Jira transitions (a required Resolution is filled in); create,
 comment, link/unlink; changes made in Jira by others appear on the ticket timeline.
 "Start work" types `git checkout -b …` into the ticket's terminal (opened in the project's
-repository, `projects[].repos[].path`); `git push`, `gh pr create`, `gh pr merge` there move
-the ticket through your automation rules.
+repository, `projects[].repos[].path`). From there, what happens on GitHub (PR opened, review,
+merge) moves the ticket through your automation rules: see
+[GitHub pull requests](#github-pull-requests).
 
 The token goes to the OS keychain only; `config.yaml` holds a `credentialRef`. See
 [`docs/config.example.yaml`](docs/config.example.yaml) for every key (a test keeps it valid).
@@ -185,9 +272,8 @@ Linux needs `webkit2gtk-4.1` (the Makefile adds `-tags webkit2_41` automatically
 - **macOS** universal (`Maestro.app`, zipped) on `macos-latest`
 - **Linux** amd64 binary
 
-Download them from the run's *Artifacts*. Pushing a `v*` tag also creates a GitHub Release.
-The macOS app is unsigned for now; after unzipping run
-`xattr -dr com.apple.quarantine Maestro.app` (or right-click → Open).
+Download them from the run's *Artifacts* (see [Install and try it](#install-and-try-it)).
+Pushing a `v*` tag also creates a GitHub Release.
 
 ## Layout
 
