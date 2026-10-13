@@ -446,3 +446,25 @@ func (t *Tracker) sprintID(project, which string) (int, error) {
 	}
 	return 0, fmt.Errorf("sprint %q is not active or planned on the %s board", which, project)
 }
+
+// LinkPullRequest adds the pull request as a web link on the issue, or
+// updates it (the PR URL is the link's global ID). A merged or closed PR is
+// shown resolved (struck through) in Jira.
+func (t *Tracker) LinkPullRequest(key string, pr tracker.PRLink) error {
+	ctx, cancel := context.WithTimeout(context.Background(), callTimeout)
+	defer cancel()
+	title := fmt.Sprintf("%s#%d: %s", pr.Repo, pr.Number, pr.Title)
+	summary := "Pull request · " + pr.State
+	link := jira.RemoteLink{GlobalID: pr.URL, Object: jira.RemoteLinkObject{URL: pr.URL, Title: title, Summary: summary,
+		Icon: &jira.RemoteLinkIcon{URL: "https://github.com/favicon.ico", Title: "GitHub"}}}
+	if pr.State != "open" {
+		link.Object.Status = &struct {
+			Resolved bool `json:"resolved"`
+		}{Resolved: true}
+	}
+	if err := t.c.UpsertRemoteLink(ctx, key, link); err != nil {
+		return errf(key, "link pull request to", err)
+	}
+	t.log.Info("pull request linked", "key", key, "repo", pr.Repo, "number", pr.Number, "state", pr.State)
+	return nil
+}

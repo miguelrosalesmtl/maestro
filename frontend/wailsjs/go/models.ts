@@ -1,8 +1,39 @@
+export namespace devsync {
+	
+	export class Status {
+	    state: string;
+	    host: string;
+	    user: string;
+	    repos: string[];
+	    error: string;
+	    lastSync: string;
+	    prs: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Status(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.state = source["state"];
+	        this.host = source["host"];
+	        this.user = source["user"];
+	        this.repos = source["repos"];
+	        this.error = source["error"];
+	        this.lastSync = source["lastSync"];
+	        this.prs = source["prs"];
+	    }
+	}
+
+}
+
 export namespace flow {
 	
 	export class Check {
 	    name: string;
 	    state: string;
+	    url?: string;
+	    required?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Check(source);
@@ -12,6 +43,8 @@ export namespace flow {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
 	        this.state = source["state"];
+	        this.url = source["url"];
+	        this.required = source["required"];
 	    }
 	}
 	export class Commit {
@@ -66,6 +99,17 @@ export namespace flow {
 	    checks: Check[];
 	    approvals: number;
 	    reviewers: string[];
+	    repo?: string;
+	    draft?: boolean;
+	    author?: string;
+	    head?: string;
+	    base?: string;
+	    requiredApprovals?: number;
+	    approvedBy?: string[];
+	    changesRequested?: string[];
+	    mergedAt?: string;
+	    updatedAt?: string;
+	    live?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new PullRequest(source);
@@ -80,6 +124,17 @@ export namespace flow {
 	        this.checks = this.convertValues(source["checks"], Check);
 	        this.approvals = source["approvals"];
 	        this.reviewers = source["reviewers"];
+	        this.repo = source["repo"];
+	        this.draft = source["draft"];
+	        this.author = source["author"];
+	        this.head = source["head"];
+	        this.base = source["base"];
+	        this.requiredApprovals = source["requiredApprovals"];
+	        this.approvedBy = source["approvedBy"];
+	        this.changesRequested = source["changesRequested"];
+	        this.mergedAt = source["mergedAt"];
+	        this.updatedAt = source["updatedAt"];
+	        this.live = source["live"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -130,6 +185,7 @@ export namespace flow {
 	    stages: Stage[];
 	    commits: Commit[];
 	    pr?: PullRequest;
+	    live: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Flow(source);
@@ -144,6 +200,7 @@ export namespace flow {
 	        this.stages = this.convertValues(source["stages"], Stage);
 	        this.commits = this.convertValues(source["commits"], Commit);
 	        this.pr = this.convertValues(source["pr"], PullRequest);
+	        this.live = source["live"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

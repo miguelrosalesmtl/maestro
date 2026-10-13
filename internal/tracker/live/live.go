@@ -597,3 +597,11 @@ func (t *Tracker) Discovery() *jira.Discovery {
 	defer t.mu.RUnlock()
 	return t.disc
 }
+
+// Has reports whether the issue is in the synced set (no network call).
+func (t *Tracker) Has(key string) bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	_, ok := t.issues[key]
+	return ok
+}

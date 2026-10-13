@@ -16,6 +16,7 @@ merge move the Jira status for you — with a real terminal bound to each ticket
 | **Board** | Sprint board; drag a card to transition it. |
 | **Roadmap** | Initiative → Epic → tickets with rolled-up progress. |
 | **Automations** | Rules: *when* dev event *then* move ticket to status. |
+| **Freestyle** | Terminals not linked to a ticket, for investigations. They start in your home folder, get no ticket variables, and never move a ticket. Double-click a tab to rename it; tabs are remembered. |
 | **Jira view** | Any ticket rendered like Jira: description, child issues / sub-tasks, linked issues (add/remove), comments, history. |
 | **Create** | Initiative → Epic → Story/Task/Bug → Sub-task, validated against the hierarchy. From the `+` on any tree row, the Jira view, the palette, or `C`. |
 
@@ -23,7 +24,7 @@ merge move the Jira status for you — with a real terminal bound to each ticket
 
 | Keys (Linux; ⌘ on macOS) | |
 |---|---|
-| `Ctrl+1` … `Ctrl+5` | My work, Focus, Board, Roadmap, Automations (works even in the terminal) |
+| `Ctrl+1` … `Ctrl+6` | My work, Focus, Board, Roadmap, Automations, Freestyle (works even in the terminal) |
 | `F11` | Full screen (or the button in the top bar) |
 | `Ctrl+Shift+M` / double-click the top bar | Maximize / restore |
 | `?` | Every shortcut, rebindable |
@@ -34,8 +35,8 @@ use `F11` here or your WM's fullscreen key (omarchy: `Super+F`).
 Press **`?`** for every shortcut in the current view; click one to rebind it (two-key
 sequences like `g b` work). Overrides are saved to `<config dir>/maestro/keybindings.json`
 (`~/.config/maestro` on Linux, `~/Library/Application Support/maestro` on macOS) and can be
-edited by hand. **`f`** shows Vimium-style link hints for anything clickable; **`F`** picks a
-ticket to open in the Jira view.
+edited by hand. **`f`** shows Vimium-style link hints for anything clickable; **`F`** shows hints on
+tickets only; picking one is the same as clicking it (the Jira view is then `J` inside the ticket).
 
 ## Jira configuration
 
@@ -89,7 +90,9 @@ Not yet: managing sprints/versions, velocity and sprint progress, release notes,
 ### Ticket terminals
 
 Each ticket can have several terminals (`PLAT-142`, `PLAT-142 #2`, …); all of them carry the
-ticket's env vars and repo folder, and git/gh commands in any of them drive the ticket.
+ticket's env vars and repo folder, and git/gh commands in any of them drive the ticket. The panel
+shows only the selected ticket's terminals; the others keep running behind the "N others" button.
+Selecting a ticket never starts a shell. In the Freestyle view the same keys act on its terminals.
 
 | Keys (Linux; ⌘ on macOS) | |
 |---|---|
@@ -106,6 +109,40 @@ has gone quiet (probably waiting for input, e.g. an AI agent's question), green 
 finished. You get a short chirp and a notice when a command finishes after ≥ 10 s or starts
 waiting — unless you are looking at that terminal. Interactive programs (vim, less, ssh, …)
 never notify. Settings: `terminal.notify` in `config.yaml`; mute from the command palette.
+
+### GitHub pull requests
+
+With Jira connected, Maestro follows the pull requests of every repository in
+`projects[].repos` and moves tickets from what really happens on GitHub:
+
+| On GitHub | Default rule |
+|---|---|
+| A branch with the key appears (local clone or PR) | → In Progress |
+| PR opened, or a draft marked ready | → In Review |
+| Changes requested | → In Progress |
+| PR merged | → Done |
+| A required check fails | → Blocked (off by default) |
+
+- **Matching:** the issue key (`dev.keyPattern`) in the head branch, else the PR title, else the
+  body. Only keys of issues Maestro has synced count.
+- **Checks and reviews:** check runs and commit statuses on the head commit; `dev.checks.required`
+  picks the ones that decide (empty = all). Approvals count each reviewer's latest review, as
+  GitHub does; `dev.review.requiredApprovals` sets how many are needed.
+- **Local work:** branches in the repo's `path` that name a ticket show up with their commits
+  (and line counts) before a PR exists.
+- **Startup is quiet:** the first look only shows the current state. Only changes seen while
+  Maestro runs fire rules, so an old merged PR never moves a reopened ticket to Done.
+- **Jira link:** each PR is added to the issue as a web link (resolved once merged or closed).
+  Turn off with `jira.writeBack.remoteLinks: false`.
+- **Cost:** one PR listing per repo per `dev.github.pollSeconds` (default 60), with ETags, so
+  an unchanged repo costs no rate limit. Typing `git`/`gh` in a ticket terminal checks again
+  within seconds, then every 15 s for two minutes.
+
+Sign-in uses the GitHub CLI by default (`gh auth login`; the token is read from `gh` on every
+call, never stored by Maestro). Without `gh`, store a fine-grained token (read access to pull
+requests, checks, commit statuses and contents) with `go run ./cmd/maestro-jira github-login`
+and set `dev.github.auth: token`. `maestro-jira check` tests the sign-in and each repository.
+The sidebar shows `GitHub · @you`, or why it is not connected.
 
 ## Logs and crashes
 
@@ -164,8 +201,11 @@ internal/config          config.yaml + team file: schema, merge, validation, imp
 internal/secrets         OS keychain credential refs (keychain:… / env:…), redacting Secret type
 internal/applog          Log file (slog JSON, rotation), crash reports, panic recovery, UI errors
 internal/setup           Discovery → proposals (roles, states, fields, boards), Connect(config) → client
-cmd/maestro-jira         CLI: login, check, discover, detect, logout
-internal/flow            Dev flow per ticket, automation rules, terminal command reactions
+cmd/maestro-jira         CLI: login, check, discover, detect, logout, github-login
+internal/flow            Dev flow per ticket, automation rules, terminal command reactions, ApplyDev
+internal/github          GitHub REST client: gh/keychain auth, ETags, retries, rate limits
+internal/github/ghtest   Fake GitHub server for tests
+internal/devsync         Pull request + local git watcher → flow.DevState
 internal/term            PTY shell sessions per ticket
 frontend/src             React + TypeScript UI
 ```

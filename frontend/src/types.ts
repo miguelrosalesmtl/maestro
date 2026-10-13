@@ -146,17 +146,41 @@ export interface Commit {
 
 export interface Check {
   name: string
-  state: StageState
+  state: StageState // active = running or queued
+  url?: string
+  required?: boolean
 }
 
 export interface PullRequest {
   number: number
   title: string
   url: string
-  state: 'open' | 'merged'
+  state: 'open' | 'merged' | 'closed'
   checks: Check[]
   approvals: number
   reviewers: string[]
+  repo?: string
+  draft?: boolean
+  author?: string
+  head?: string
+  base?: string
+  requiredApprovals?: number
+  approvedBy?: string[]
+  changesRequested?: string[]
+  mergedAt?: string
+  updatedAt?: string
+  live?: boolean // from GitHub, not simulated
+}
+
+/** Pull request watching (GitHub + local git), as the backend reports it. */
+export interface GitHubStatus {
+  state: 'off' | 'connecting' | 'ok' | 'error'
+  host: string
+  user: string
+  repos: string[] | null
+  error: string
+  lastSync: string
+  prs: number
 }
 
 export interface Flow {
@@ -167,6 +191,7 @@ export interface Flow {
   stages: Stage[]
   commits: Commit[]
   pr: PullRequest | null
+  live?: boolean // stages come from GitHub and git
 }
 
 export interface FlowEvent {
@@ -246,4 +271,10 @@ export interface TermLightState {
   seconds?: number
 }
 
-export type View = 'mine' | 'focus' | 'board' | 'roadmap' | 'automations'
+export type View = 'mine' | 'focus' | 'board' | 'roadmap' | 'automations' | 'freestyle'
+
+/** A terminal that belongs to no ticket (Freestyle view). id is "free:N". */
+export interface FreeSession {
+  id: string
+  name: string
+}

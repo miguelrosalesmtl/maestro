@@ -40,6 +40,8 @@ type App struct {
 	flow    *flow.Engine
 	live    *live.Tracker // nil in demo mode
 	conn    Connection
+
+	dev devState // GitHub pull requests and local branches (github.go)
 }
 
 func NewApp(cfg *config.Config, logs *applog.Logs) *App {
@@ -79,6 +81,7 @@ func (a *App) shutdown(ctx context.Context) {
 	a.mu.RLock()
 	lt := a.live
 	a.mu.RUnlock()
+	a.stopDevSync()
 	if lt != nil {
 		lt.Stop()
 	}
@@ -251,6 +254,11 @@ func (a *App) CopyToClipboard(text string) bool {
 // Output arrives via the "term:data" event as base64.
 // session is the ticket key, or "KEY#n" for extra terminals on the same ticket.
 func (a *App) TermOpen(session string, cols, rows int) (bool, error) {
+	if term.IsFreestyle(session) {
+		// Not linked to a ticket: home folder, no ticket context.
+		created, err := a.term.Open(term.Context{Session: session}, uint16(cols), uint16(rows))
+		return created, a.fail("open freestyle terminal", err, "session", session)
+	}
 	key := term.SessionTicket(session)
 	is, err := a.tr().GetIssue(key)
 	if err != nil {

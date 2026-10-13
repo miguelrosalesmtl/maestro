@@ -1,7 +1,7 @@
 /* Jira issue view — modelled on Atlassian's dark theme so it reads as "the real thing". */
 .jira-backdrop {
   position: fixed; inset: 0; z-index: 150; display: grid; place-items: center; padding: 3vh 3vw;
-  background: rgba(3, 4, 6, .6); backdrop-filter: blur(4px);
+  background: rgba(3, 4, 6, .78);
 }
 .jira {
   --j-bg: #1d2125; --j-raised: #22272b; --j-overlay: #282e33; --j-hover: #a1bdd914; --j-pressed: #a6c5e229;

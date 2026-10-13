@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { api } from './api'
 import { EventsOn } from '../wailsjs/runtime/runtime'
 import { reportError } from './lib/errors'
-import type { Connection, CreateDefaults, CustomColumn, FieldPatch, SprintInfo, TermActivity, TermLightState, VersionInfo, Flow, FlowEvent, Issue, IssueType, NewIssue, Rule, StepResult, User, View } from './types'
+import type { Connection, FreeSession, GitHubStatus, CreateDefaults, CustomColumn, FieldPatch, SprintInfo, TermActivity, TermLightState, VersionInfo, Flow, FlowEvent, Issue, IssueType, NewIssue, Rule, StepResult, User, View } from './types'
 import { isWork, setStatusStates } from './lib/util'
 import { chirp, loadMuted, saveMuted } from './lib/chirp'
 import { WindowSetTitle } from '../wailsjs/runtime/runtime'
@@ -51,6 +51,13 @@ interface Store {
   /** Opens (and by default focuses) a terminal for the ticket; fresh = a new one. Returns the session. */
   openTerminal: (ticket: string, opts?: { focus?: boolean; fresh?: boolean }) => string
   closeTerminal: (session: string) => void
+  /** Freestyle terminals: not linked to any ticket. */
+  freeSessions: FreeSession[]
+  activeFree: string | null
+  selectFree: (id: string) => void
+  newFree: () => string
+  closeFree: (id: string) => void
+  renameFree: (id: string, name: string) => void
   createDraft: Partial<NewIssue> | null
   openCreate: (defaults?: Partial<NewIssue>) => void
   closeCreate: () => void
@@ -70,6 +77,7 @@ interface Store {
   /** Re-reads one issue (with comments) from the tracker. */
   refreshIssue: (key: string) => Promise<void>
   connection: Connection | null
+  github: GitHubStatus | null
   live: boolean
   projects: string[]
   sprints: SprintInfo[]
@@ -108,6 +116,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [linkTypes, setLinkTypes] = useState<Record<string, string>>({})
   const [createDraft, setCreateDraft] = useState<Partial<NewIssue> | null>(null)
   const [connection, setConnection] = useState<Connection | null>(null)
+  const [github, setGitHub] = useState<GitHubStatus | null>(null)
   const [live, setLive] = useState(false)
   const [projects, setProjects] = useState<string[]>([])
   const [sprints, setSprints] = useState<SprintInfo[]>([])
@@ -126,8 +135,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [chirpMuted, setChirpMutedState] = useState(loadMuted)
   const sessionsRef = useRef<string[]>([])
   sessionsRef.current = termSessions
-  const viewRef = useRef({ activeSession, termOpen })
-  viewRef.current = { activeSession, termOpen }
+  const [freeSessions, setFreeSessionsState] = useState<FreeSession[]>(loadFree)
+  const [activeFree, setActiveFree] = useState<string | null>(() => loadFree().at(-1)?.id ?? null)
+  const freeRef = useRef(freeSessions)
+  freeRef.current = freeSessions
+  const setFreeSessions = useCallback((f: (s: FreeSession[]) => FreeSession[]) => {
+    setFreeSessionsState(s => { const n = f(s); saveFree(n); freeRef.current = n; return n })
+  }, [])
+  const viewRef = useRef({ activeSession, termOpen, view, activeFree })
+  viewRef.current = { activeSession, termOpen, view, activeFree }
 
   useEffect(() => {
     api.snapshot().then(s => {
@@ -173,6 +189,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }), [])
   useEffect(() => EventsOn('tracker:connection', (c: Connection) => setConnection(c)), [])
   useEffect(() => { api.connection().then(setConnection).catch(() => {}) }, [])
+  useEffect(() => EventsOn('github:status', (g: GitHubStatus) => setGitHub(g)), [])
+  useEffect(() => { api.githubStatus().then(setGitHub).catch(() => {}) }, [])
 
   const pushToast = useCallback((t: Omit<Toast, 'id'>) => {
     const id = `t${++toastSeq}`
@@ -205,13 +223,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => EventsOn('term:exit', (session: string) => {
     setTermSessions(ss => ss.filter(s => s !== session))
     setTermActivity(a => { const n = { ...a }; delete n[session]; return n })
-  }), [])
+    // A freestyle shell that exits (e.g. "exit") closes its tab.
+    if (session.startsWith(FREE)) setFreeSessions(fs => fs.filter(f => f.id !== session))
+  }), [setFreeSessions])
 
   // Terminal activity: light on the ticket, and a chirp + notice when a long
   // command finishes or a command starts waiting — unless you're looking at it.
   useEffect(() => EventsOn('term:activity', (ev: TermActivity) => {
     const v = viewRef.current
-    const watching = document.hasFocus() && v.termOpen && v.activeSession === ev.session
+    const free = ev.session.startsWith(FREE)
+    const watching = document.hasFocus() && (free ? v.view === 'freestyle' && v.activeFree === ev.session : v.termOpen && v.activeSession === ev.session)
     setTermActivity(a => ({
       ...a,
       [ev.session]: ev.finished
@@ -219,16 +240,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         : { state: ev.state, command: ev.command, since: ev.since },
     }))
     if (!ev.notify || watching) return
-    const label = ev.session.includes('#') ? ev.session.replace('#', ' #') : ev.session
+    const label = free ? freeRef.current.find(f => f.id === ev.session)?.name ?? 'Freestyle' : ev.session.includes('#') ? ev.session.replace('#', ' #') : ev.session
     const what = ev.command || 'command'
     if (ev.sound && !loadMuted()) chirp(ev.finished ? 'done' : 'waiting')
     pushToast({
       tone: ev.finished ? 'dev' : 'automation',
       title: ev.finished ? `${label}: ${what} finished` : `${label}: ${what} is waiting for input`,
       detail: ev.finished ? `after ${formatSeconds(ev.seconds ?? 0)} · click to open the terminal` : 'Click to open the terminal',
-      onClick: () => { setActiveSession(ev.session); setFocusKey(ev.ticket); setTermOpen(true); focusTerminalSoon(ev.session) },
+      onClick: free
+        ? () => { setView('freestyle'); setActiveFree(ev.session); focusTerminalSoon(ev.session) }
+        : () => { setActiveSession(ev.session); setFocusKey(ev.ticket); setTermOpen(true); focusTerminalSoon(ev.session) },
     })
   }), [pushToast])
+
+  // Seeing a freestyle terminal clears its "finished" light.
+  useEffect(() => {
+    if (view !== 'freestyle' || !activeFree) return
+    setTermActivity(a => a[activeFree]?.state === 'finished' ? { ...a, [activeFree]: { state: 'idle' } } : a)
+  }, [view, activeFree])
 
   // Seeing a session clears its "finished" light.
   useEffect(() => {
@@ -273,8 +302,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (opts?.focus !== false) focusTerminalSoon(session)
       return session
     },
+    freeSessions, activeFree,
+    selectFree: id => { setActiveFree(id); focusTerminalSoon(id) },
+    newFree: () => {
+      const n = nextFree(freeRef.current)
+      const id = `${FREE}${n}`
+      const next = [...freeRef.current, { id, name: `Freestyle ${n}` }]
+      freeRef.current = next // two quick calls must not reuse the same id
+      setFreeSessions(() => next)
+      setActiveFree(id)
+      focusTerminalSoon(id)
+      return id
+    },
+    closeFree: id => {
+      void api.termClose(id).catch(() => {})
+      const rest = freeRef.current.filter(f => f.id !== id)
+      setFreeSessions(() => rest)
+      setTermActivity(a => { const n = { ...a }; delete n[id]; return n })
+      if (viewRef.current.activeFree === id) setActiveFree(rest.at(-1)?.id ?? null)
+    },
+    renameFree: (id, name) => setFreeSessions(fs => fs.map(f => f.id === id ? { ...f, name: name.trim() || f.name } : f)),
     createDraft, openCreate: d => setCreateDraft(d ?? {}), closeCreate: () => setCreateDraft(null),
-    connection, live, projects, sprints, versions, createDefaults, timeTracking, customColumns,
+    connection, github, live, projects, sprints, versions, createDefaults, timeTracking, customColumns,
     updateFields: async (key, p) => {
       try {
         putIssue(await api.updateFields(key, p))
@@ -333,12 +382,33 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setRuleStatus: guard(async (id, status) => setRules(await api.setRuleStatus(id, status))),
     copy: (text, label) => { api.copy(text); pushToast({ tone: 'dev', title: 'Copied to clipboard', detail: label ?? text }) },
     dismissToast: id => setToasts(ts => ts.filter(t => t.id !== id)),
-  }), [ready, me, issues, flows, statuses, rules, activity, toasts, users, sprint, childTypes, linkTypes, createDraft, connection, live, projects, sprints, versions, createDefaults, timeTracking, customColumns, view, focusKey, jiraKey, paletteOpen, termOpen, termSessions, activeSession, termActivity, chirpMuted, guard, applyStep, pushToast])
+  }), [ready, me, issues, flows, statuses, rules, activity, toasts, users, sprint, childTypes, linkTypes, createDraft, connection, github, live, projects, sprints, versions, createDefaults, timeTracking, customColumns, view, focusKey, jiraKey, paletteOpen, termOpen, termSessions, activeSession, termActivity, chirpMuted, freeSessions, activeFree, setFreeSessions, guard, applyStep, pushToast])
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }
 
 export const sessionTicket = (session: string) => session.split('#')[0]
+
+const FREE = 'free:'
+const FREE_KEY = 'maestro.freestyle'
+
+/** Freestyle tabs and their names are remembered per machine; shells restart with the app. */
+function loadFree(): FreeSession[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(FREE_KEY) ?? '[]')
+    return Array.isArray(v) ? v.filter(f => typeof f?.id === 'string' && f.id.startsWith(FREE) && typeof f.name === 'string') : []
+  } catch { return [] }
+}
+
+function saveFree(fs: FreeSession[]) {
+  try { localStorage.setItem(FREE_KEY, JSON.stringify(fs)) } catch { /* per-viewer convenience only */ }
+}
+
+function nextFree(fs: FreeSession[]) {
+  let n = 1
+  while (fs.some(f => f.id === `${FREE}${n}`)) n++
+  return n
+}
 
 function nextIndex(sessions: string[]) {
   let n = 1

@@ -10,6 +10,7 @@ import { FocusView } from './components/FocusView'
 import { BoardView } from './components/BoardView'
 import { RoadmapView } from './components/RoadmapView'
 import { AutomationsView } from './components/AutomationsView'
+import { FreestyleView } from './components/FreestyleView'
 import { JiraIssueView } from './components/JiraIssueView'
 import { CommandPalette } from './components/CommandPalette'
 import { Toasts } from './components/Toasts'
@@ -21,7 +22,7 @@ import { timeAgo } from './lib/util'
 
 if (isMac) document.documentElement.classList.add('mac')
 
-const TITLES: Record<View, string> = { mine: 'My work', focus: 'Focus', board: 'Board', roadmap: 'Roadmap', automations: 'Automations' }
+const TITLES: Record<View, string> = { mine: 'My work', focus: 'Focus', board: 'Board', roadmap: 'Roadmap', automations: 'Automations', freestyle: 'Freestyle' }
 
 function Shell() {
   const { ready, view, jiraKey, paletteOpen, createDraft, connection } = useStore()
@@ -71,6 +72,7 @@ function Workspace({ help, setHelp, hints, setHints }: {
   useAction('nav.board', () => setView('board'))
   useAction('nav.roadmap', () => setView('roadmap'))
   useAction('nav.automations', () => setView('automations'))
+  useAction('nav.freestyle', () => setView('freestyle'))
   const [fullscreen, setFullscreen] = useState(false)
   const toggleFullscreen = useCallback(() => {
     const next = !fullscreen
@@ -81,11 +83,12 @@ function Workspace({ help, setHelp, hints, setHints }: {
   useAction('window.fullscreen', toggleFullscreen)
   useAction('window.maximize', toggleMaximize)
 
+  // Picking a hint is exactly a click: a ticket opens where clicking it would
+  // (Focus, the board card…); the Jira view is a step inside the ticket (J).
   const pick = useCallback((el: HTMLElement) => {
-    if (hints === 'ticket' && el.dataset.issue) return openJira(el.dataset.issue)
     if (el.matches('input, textarea, select')) el.focus()
     else el.click()
-  }, [hints, openJira])
+  }, [])
 
 
   const latest = activity[0]
@@ -119,6 +122,7 @@ function Workspace({ help, setHelp, hints, setHints }: {
           {view === 'board' && <BoardView />}
           {view === 'roadmap' && <RoadmapView />}
           {view === 'automations' && <AutomationsView />}
+          {view === 'freestyle' && <FreestyleView />}
         </div>
         <TerminalDock />
       </div>

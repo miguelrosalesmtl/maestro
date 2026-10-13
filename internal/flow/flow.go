@@ -1,8 +1,9 @@
 // Package flow tracks the developer workflow (branch → PR → merge) for each
 // ticket and applies automation rules that move the ticket in the tracker.
 //
-// Git/GitHub events are simulated for now; the plumbing will replace Advance
-// with real webhook/CLI signals.
+// With the mock tracker, dev events are simulated (Advance). With a live
+// tracker, ApplyDev receives the real state from the GitHub watcher and the
+// local git scan.
 package flow
 
 import (
@@ -57,18 +58,32 @@ type Commit struct {
 }
 
 type Check struct {
-	Name  string     `json:"name"`
-	State StageState `json:"state"`
+	Name     string     `json:"name"`
+	State    StageState `json:"state"` // active = running or queued
+	URL      string     `json:"url,omitempty"`
+	Required bool       `json:"required,omitempty"`
 }
 
 type PullRequest struct {
 	Number    int      `json:"number"`
 	Title     string   `json:"title"`
 	URL       string   `json:"url"`
-	State     string   `json:"state"` // open | merged
+	State     string   `json:"state"` // open | merged | closed
 	Checks    []Check  `json:"checks"`
 	Approvals int      `json:"approvals"`
 	Reviewers []string `json:"reviewers"`
+
+	Repo              string   `json:"repo,omitempty"`
+	Draft             bool     `json:"draft,omitempty"`
+	Author            string   `json:"author,omitempty"`
+	Head              string   `json:"head,omitempty"`
+	Base              string   `json:"base,omitempty"`
+	RequiredApprovals int      `json:"requiredApprovals,omitempty"`
+	ApprovedBy        []string `json:"approvedBy,omitempty"`
+	ChangesRequested  []string `json:"changesRequested,omitempty"`
+	MergedAt          string   `json:"mergedAt,omitempty"`
+	UpdatedAt         string   `json:"updatedAt,omitempty"`
+	Live              bool     `json:"live,omitempty"` // from GitHub, not simulated
 }
 
 type Flow struct {
@@ -79,6 +94,8 @@ type Flow struct {
 	Stages   []Stage      `json:"stages"`
 	Commits  []Commit     `json:"commits"`
 	PR       *PullRequest `json:"pr"`
+	// Live is true when the stages come from GitHub and git, not the demo.
+	Live bool `json:"live"`
 }
 
 type Event struct {
@@ -113,6 +130,8 @@ type Engine struct {
 	events []Event
 	seq    int
 	repo   string
+	sim    bool
+	poke   func(key string)
 }
 
 // DefaultRules are the demo rules (status names of the mock tracker).
@@ -139,15 +158,20 @@ type Options struct {
 	Rules []Rule
 	Repo  string // shown in the code panel
 	Seed  bool   // demo flows and events (mock tracker only)
+	// Simulate lets terminal commands and Advance fake the next dev event
+	// (demo). Off with a live tracker: real events come from ApplyDev.
+	Simulate bool
+	// Poke asks the dev watcher to look again soon (after git push, gh pr …).
+	Poke func(key string)
 }
 
 // NewEngine is the demo engine used with the mock tracker.
 func NewEngine(tr tracker.Tracker) *Engine {
-	return NewEngineWith(tr, Options{Rules: DefaultRules(), Repo: "acme/platform", Seed: true})
+	return NewEngineWith(tr, Options{Rules: DefaultRules(), Repo: "acme/platform", Seed: true, Simulate: true})
 }
 
 func NewEngineWith(tr tracker.Tracker, o Options) *Engine {
-	e := &Engine{tr: tr, flows: map[string]*Flow{}, repo: o.Repo, rules: append([]Rule(nil), o.Rules...)}
+	e := &Engine{tr: tr, flows: map[string]*Flow{}, repo: o.Repo, rules: append([]Rule(nil), o.Rules...), sim: o.Simulate, poke: o.Poke}
 	if o.Seed {
 		e.seed()
 	}
@@ -347,6 +371,9 @@ func (e *Engine) Advance(key string) (StepResult, error) {
 }
 
 func (e *Engine) advance(key string) (StepResult, error) {
+	if !e.sim {
+		return StepResult{}, fmt.Errorf("simulation is only available in demo mode")
+	}
 	is, err := e.tr.GetIssue(key)
 	if err != nil {
 		return StepResult{}, err
@@ -369,7 +396,7 @@ func (e *Engine) advance(key string) (StepResult, error) {
 	case f.stage("pr").State == StateActive:
 		f.PR = &PullRequest{Number: 480 + len(e.flows), Title: fmt.Sprintf("[%s] %s", is.Key, is.Summary),
 			URL: fmt.Sprintf("https://github.com/%s/pull/%d", f.Repo, 480+len(e.flows)), State: "open",
-			Checks: []Check{{"build", StateActive}, {"unit-tests", StateActive}, {"lint", StateActive}}, Reviewers: []string{"Ana Torres", "Devon Park"}}
+			Checks: []Check{{Name: "build", State: StateActive}, {Name: "unit-tests", State: StateActive}, {Name: "lint", State: StateActive}}, Reviewers: []string{"Ana Torres", "Devon Park"}}
 		f.complete("pr", fmt.Sprintf("#%d opened", f.PR.Number))
 		evs = append(evs, e.emit(key, "dev", fmt.Sprintf("PR #%d opened", f.PR.Number), f.PR.Title, ""))
 		evs = append(evs, e.fire(key, TriggerPROpened)...)
@@ -433,7 +460,7 @@ func (e *Engine) seed() {
 	}
 	g.PR = &PullRequest{Number: 478, Title: "[PLAT-139] Pre-warm connection pools on green stack", URL: "https://github.com/acme/platform/pull/478",
 		State: "open", Approvals: 1, Reviewers: []string{"Ana Torres", "Devon Park"},
-		Checks: []Check{{"build", StateDone}, {"unit-tests", StateDone}, {"lint", StateDone}}}
+		Checks: []Check{{Name: "build", State: StateDone}, {Name: "unit-tests", State: StateDone}, {Name: "lint", State: StateDone}}}
 	e.emit("PLAT-139", "dev", "PR #478 opened", g.PR.Title, ts(18*h))
 	e.emit("PLAT-139", "automation", "In Progress → In Review", "Rule “Pull request opened” fired", ts(18*h-time.Minute))
 	e.emit("PLAT-139", "dev", "Ana Torres approved", "1 of 2 approvals", ts(3*h))
@@ -476,6 +503,30 @@ func (e *Engine) OnCommand(key, line string) (res StepResult, ok bool) {
 		}
 	}
 
+	if !e.sim {
+		switch {
+		case has("git", "checkout", "-b") || has("git", "switch", "-c"):
+			// A real branch: start work now, the git scan confirms it later.
+			if !f.Started && len(fields) > 3 {
+				collect(e.start(key))
+				f.Branch = fields[3]
+				f.stage("branch").Detail = f.Branch
+			}
+			if e.poke != nil {
+				e.poke(key)
+			}
+		case has("git") || has("gh"):
+			if e.poke != nil {
+				e.poke(key)
+			}
+		case has("make") || has("go", "test") || has("npm", "test") || has("npm", "run"):
+		default:
+			e.events = e.events[:len(e.events)-1]
+			return StepResult{}, false
+		}
+		r, _ := e.result(f, logged)
+		return r, true
+	}
 	switch {
 	case has("git", "checkout", "-b") || has("git", "switch", "-c"):
 		if !f.Started && len(fields) > 3 {

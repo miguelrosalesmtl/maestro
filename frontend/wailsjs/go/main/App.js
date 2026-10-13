@@ -34,6 +34,10 @@ export function GetFlow(arg1) {
   return window['go']['main']['App']['GetFlow'](arg1);
 }
 
+export function GetGitHubStatus() {
+  return window['go']['main']['App']['GetGitHubStatus']();
+}
+
 export function GetIssue(arg1) {
   return window['go']['main']['App']['GetIssue'](arg1);
 }

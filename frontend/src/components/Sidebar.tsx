@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ChevronRight, Columns3, Crosshair, Flag, Inbox, Keyboard, Layers, Lock, Plus, Search, Zap } from 'lucide-react'
+import { ChevronRight, Columns3, Crosshair, Flag, GitPullRequest, SquareDashedBottomCode, Inbox, Keyboard, Layers, Lock, Plus, Search, Zap } from 'lucide-react'
 import { combosOf, compactCombo, formatCombo, useKeys } from '../keys'
 import { useStore } from '../store'
 import type { Issue, View } from '../types'
@@ -13,6 +13,7 @@ const NAV: { id: View; label: string; short: string; icon: typeof Crosshair; act
   { id: 'board', label: 'Board', short: 'Board', icon: Columns3, action: 'nav.board' },
   { id: 'roadmap', label: 'Roadmap', short: 'Roadmap', icon: Layers, action: 'nav.roadmap' },
   { id: 'automations', label: 'Automations', short: 'Auto', icon: Zap, action: 'nav.automations' },
+  { id: 'freestyle', label: 'Freestyle terminals (no ticket)', short: 'Free', icon: SquareDashedBottomCode, action: 'nav.freestyle' },
 ]
 
 export function Rail() {
@@ -55,6 +56,7 @@ export function Sidebar() {
   const { issues, flows, me, focusKey, setFocusKey, setView, setPaletteOpen, openCreate, openJira, childTypes } = useStore()
   const [mine, setMine] = useState(true)
   const conn = useConnection()
+  const gh = useGitHub()
   const { live } = useStore()
   const [q, setQ] = useState('')
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
@@ -131,6 +133,11 @@ export function Sidebar() {
             <span className="conn-dot" /> {conn.label}
             {(conn.state === 'none' || (conn.state === 'error' && !live)) && <span className="mock-tag">demo data</span>}
           </div>
+          {gh && (
+            <div className={cx('ws-sub', 'gh-sub', `conn-${gh.state}`)} title={gh.hint}>
+              <GitPullRequest size={11} /> {gh.label}
+            </div>
+          )}
         </div>
       </div>
 
@@ -155,6 +162,20 @@ export function Sidebar() {
       </div>
     </aside>
   )
+}
+
+/** Pull request watching. Hidden in demo mode, where PRs are simulated. */
+function useGitHub(): { state: ConnState; label: string; hint: string } | null {
+  const { github: g, live } = useStore()
+  if (!g || !live) return null
+  const repos = (g.repos ?? []).join(', ')
+  const host = g.host || 'github.com'
+  switch (g.state) {
+    case 'ok': return { state: 'live', label: `GitHub · @${g.user}`, hint: `Following ${repos} (${g.prs} pull request${g.prs === 1 ? '' : 's'} linked${g.lastSync ? ` · checked ${timeAgo(g.lastSync)}` : ''})` }
+    case 'connecting': return { state: 'syncing', label: `${host} · connecting…`, hint: `Reading pull requests of ${repos}` }
+    case 'off': return { state: 'none', label: 'GitHub off', hint: g.error }
+  }
+  return { state: 'error', label: g.user ? `GitHub · @${g.user} · problem` : 'GitHub not connected', hint: g.error }
 }
 
 type ConnState = 'live' | 'syncing' | 'offline' | 'configured' | 'none' | 'error'

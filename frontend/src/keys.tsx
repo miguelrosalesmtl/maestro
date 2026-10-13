@@ -18,7 +18,7 @@ export interface ActionDef {
 export const ACTIONS: ActionDef[] = [
   { id: 'help', label: 'Show keyboard shortcuts', group: 'General', scope: 'global', keys: '?' },
   { id: 'hints', label: 'Click anything (link hints)', group: 'General', scope: 'global', keys: 'f' },
-  { id: 'hints.ticket', label: 'Pick a ticket to open in Jira view', group: 'General', scope: 'global', keys: 'shift+f' },
+  { id: 'hints.ticket', label: 'Pick a ticket (hints on tickets only)', group: 'General', scope: 'global', keys: 'shift+f' },
   { id: 'palette', label: 'Command palette', group: 'General', scope: 'global', keys: 'mod+k', anywhere: true },
   { id: 'search', label: 'Filter / search', group: 'General', scope: 'global', keys: '/' },
   { id: 'create', label: 'Create issue', group: 'General', scope: 'global', keys: 'c' },
@@ -26,7 +26,7 @@ export const ACTIONS: ActionDef[] = [
   { id: 'terminal.toggle', label: 'Jump to terminal / back to the app', group: 'Terminal', scope: 'global', keys: 'ctrl+`', anywhere: true },
   { id: 'terminal.focus', label: 'Focus terminal', group: 'Terminal', scope: 'global', keys: 't' },
   { id: 'terminal.hide', label: 'Show / hide terminal panel', group: 'Terminal', scope: 'global', keys: 'mod+shift+j', anywhere: true },
-  { id: 'terminal.new', label: 'New terminal for this ticket', group: 'Terminal', scope: 'global', keys: 'mod+shift+t', anywhere: true },
+  { id: 'terminal.new', label: 'New terminal (this ticket, or Freestyle)', group: 'Terminal', scope: 'global', keys: 'mod+shift+t', anywhere: true },
   { id: 'terminal.next', label: 'Next terminal tab', group: 'Terminal', scope: 'global', keys: 'mod+pagedown', anywhere: true },
   { id: 'terminal.prev', label: 'Previous terminal tab', group: 'Terminal', scope: 'global', keys: 'mod+pageup', anywhere: true },
   { id: 'terminal.close', label: 'Close this terminal', group: 'Terminal', scope: 'global', keys: 'mod+shift+w', anywhere: true },
@@ -37,6 +37,7 @@ export const ACTIONS: ActionDef[] = [
   { id: 'nav.board', label: 'Go to Board', group: 'Navigation', scope: 'global', keys: 'mod+3', anywhere: true },
   { id: 'nav.roadmap', label: 'Go to Roadmap', group: 'Navigation', scope: 'global', keys: 'mod+4', anywhere: true },
   { id: 'nav.automations', label: 'Go to Automations', group: 'Navigation', scope: 'global', keys: 'mod+5', anywhere: true },
+  { id: 'nav.freestyle', label: 'Go to Freestyle terminals', group: 'Navigation', scope: 'global', keys: 'mod+6', anywhere: true },
   { id: 'window.fullscreen', label: 'Toggle full screen', group: 'Window', scope: 'global', keys: 'f11', anywhere: true },
   { id: 'window.maximize', label: 'Maximize / restore window', group: 'Window', scope: 'global', keys: 'mod+shift+m', anywhere: true },
 

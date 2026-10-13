@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
@@ -47,11 +47,11 @@ const THEME = {
   brightBlack: '#6c6e82', brightRed: '#ff8299', brightGreen: '#6ee7b7', brightYellow: '#fcd34d', brightBlue: '#7cb7ff', brightMagenta: '#c4b5fd', brightCyan: '#67e8f9', brightWhite: '#ffffff',
 }
 
-function TermPane({ session, active }: { session: string; active: boolean }) {
-  const { issues, flows } = useStore()
+// A pane does not read the store: it would re-render on every app change.
+// banner() is read once, when the shell starts.
+export const TermPane = memo(function TermPane({ session, active, banner }: { session: string; active: boolean; banner: (session: string) => string }) {
   const host = useRef<HTMLDivElement>(null)
   const fitRef = useRef<(() => void) | null>(null)
-  const ticket = sessionTicket(session)
 
   useEffect(() => {
     const term = new XTerm({
@@ -74,20 +74,10 @@ function TermPane({ session, active }: { session: string; active: boolean }) {
     term.open(host.current!)
     safeFit()
 
-    const is = issues[ticket]
-    const branch = flows[ticket]?.branch
-    const n = session.split('#')[1]
-    const summary = is?.security ? '(secured issue)' : is?.summary ?? ''
-    const banner = [
-      `\x1b[38;2;124;92;255m●\x1b[0m \x1b[1m${ticket}\x1b[0m${n ? `  \x1b[2mterminal ${n}\x1b[0m` : ''}  ${summary}`,
-      `\x1b[2m  status ${is?.status ?? '?'}${branch ? `  ·  branch ${branch}` : ''}  ·  $MAESTRO_TICKET is set\x1b[0m`,
-      `\x1b[2m  git/gh commands run here update the ticket automatically\x1b[0m`, '', '',
-    ].join('\r\n')
-
     writers.set(session, b => term.write(b))
     focusers.set(session, () => term.focus())
     api.termOpen(session, term.cols, term.rows).then(created => {
-      if (created) term.write(banner)
+      if (created) term.write(banner(session))
       else api.termWrite(session, '\r') // reattached: ask the shell to redraw its prompt
     })
     const d1 = term.onData(d => api.termWrite(session, d))
@@ -112,7 +102,7 @@ function TermPane({ session, active }: { session: string; active: boolean }) {
   }, [active, session])
 
   return <div ref={host} className={cx('term-pane', active && 'active')} />
-}
+})
 
 const SHARE_KEY = 'maestro.terminalShare'
 const DEFAULT_SHARE = 0.33
@@ -136,7 +126,10 @@ function clampHeight(h: number, viewport: number) {
 const terminalHasFocus = () => !!document.activeElement?.closest('.xterm')
 
 export function TerminalDock() {
-  const { termOpen, setTermOpen, termSessions, activeSession, selectSession, openTerminal, closeTerminal, focusKey, issues, flows, termActivity } = useStore()
+  const { termOpen, setTermOpen, termSessions, activeSession, selectSession, openTerminal, closeTerminal, focusKey, issues, flows, termActivity, view } = useStore()
+  // Freestyle has its own full-size terminals; the ticket dock steps aside
+  // (its shells keep running) and leaves the terminal shortcuts to that view.
+  const away = view === 'freestyle'
   // The panel's height is a share of the window, so it scales with the screen;
   // dragging the edge changes the share, which is remembered.
   const [share, setShare] = useState(loadShare)
@@ -150,41 +143,42 @@ export function TerminalDock() {
   const drag = useRef<{ y: number; h: number } | null>(null)
   const focused = issues[focusKey]
 
-  // The active session follows the focused ticket; if that ticket has no
-  // terminal, the last session stays active (opened on demand, below).
-  const active = activeSession && termSessions.includes(activeSession) ? activeSession : termSessions[termSessions.length - 1] ?? null
-  const ticketKey = active ? sessionTicket(active) : undefined
+  // The dock shows the selected ticket's terminals only. Selecting a ticket
+  // never starts a shell; the user opens one when they want it.
+  const ticketKey = focused && isWork(focused) ? focusKey : activeSession ? sessionTicket(activeSession) : undefined
+  const mine = ticketKey ? termSessions.filter(s => sessionTicket(s) === ticketKey) : []
+  const active = activeSession && mine.includes(activeSession) ? activeSession : mine[mine.length - 1] ?? null
   const issue = ticketKey ? issues[ticketKey] : undefined
   const flow = ticketKey ? flows[ticketKey] : undefined
+  // Terminals of other tickets: one entry per ticket, with its light.
+  const others = [...new Set(termSessions.map(sessionTicket))].filter(t => t !== ticketKey)
+  const [othersOpen, setOthersOpen] = useState(false)
 
-  // Opening the panel shows the focused ticket's terminal (creating one if needed).
-  useEffect(() => {
-    if (termOpen && focused && isWork(focused)) openTerminal(focusKey, { focus: false })
-  }, [termOpen, focusKey]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const workTicket = focused && isWork(focused) ? focusKey : ticketKey
+  const workTicket = ticketKey
   const cycle = (d: number) => {
-    if (!termSessions.length) return
-    const i = active ? termSessions.indexOf(active) : -1
-    selectSession(termSessions[(i + d + termSessions.length) % termSessions.length])
+    if (!mine.length) return
+    const i = active ? mine.indexOf(active) : -1
+    selectSession(mine[(i + d + mine.length) % mine.length])
   }
 
   // Ctrl+`: hidden → open and focus; typing in it → back to the app; else focus it.
   useAction('terminal.toggle', () => {
+    if (away) return
     if (!termOpen) { if (workTicket) openTerminal(workTicket); else setTermOpen(true); return }
     if (terminalHasFocus()) { (document.activeElement as HTMLElement | null)?.blur(); return }
     if (active) selectSession(active)
     else if (workTicket) openTerminal(workTicket)
   })
-  useAction('terminal.focus', () => { if (workTicket) openTerminal(workTicket) })
+  useAction('terminal.focus', () => { if (!away && workTicket) openTerminal(workTicket) })
   useAction('terminal.hide', () => {
+    if (away) return
     if (termOpen && terminalHasFocus()) (document.activeElement as HTMLElement | null)?.blur()
     setTermOpen(!termOpen)
   })
-  useAction('terminal.new', () => { if (workTicket) openTerminal(workTicket, { fresh: true }) })
-  useAction('terminal.next', () => cycle(1))
-  useAction('terminal.prev', () => cycle(-1))
-  useAction('terminal.close', () => { if (active) closeTerminal(active) })
+  useAction('terminal.new', () => { if (!away && workTicket) openTerminal(workTicket, { fresh: true }) })
+  useAction('terminal.next', () => { if (!away) cycle(1) })
+  useAction('terminal.prev', () => { if (!away) cycle(-1) })
+  useAction('terminal.close', () => { if (!away && active) closeTerminal(active) })
 
   useEffect(() => {
     const move = (e: MouseEvent) => {
@@ -220,17 +214,33 @@ export function TerminalDock() {
     { label: 'merge PR', cmd: 'gh pr merge --squash --delete-branch', show: !!flow?.pr && flow.pr.state !== 'merged' },
   ] : []
 
+  // Stable for the memoized panes; reads the latest data when called.
+  const data = useRef({ issues, flows })
+  data.current = { issues, flows }
+  const banner = useCallback((session: string) => {
+    const ticket = sessionTicket(session)
+    const is = data.current.issues[ticket]
+    const branch = data.current.flows[ticket]?.branch
+    const n = session.split('#')[1]
+    const summary = is?.security ? '(secured issue)' : is?.summary ?? ''
+    return [
+      `\x1b[38;2;124;92;255m●\x1b[0m \x1b[1m${ticket}\x1b[0m${n ? `  \x1b[2mterminal ${n}\x1b[0m` : ''}  ${summary}`,
+      `\x1b[2m  status ${is?.status ?? '?'}${branch ? `  ·  branch ${branch}` : ''}  ·  $MAESTRO_TICKET is set\x1b[0m`,
+      `\x1b[2m  git/gh commands run here update the ticket automatically\x1b[0m`, '', '',
+    ].join('\r\n')
+  }, [])
+
   const ticketSessions = (t: string) => termSessions.filter(s => sessionTicket(s) === t)
 
   return (
-    <section className={cx('dock', !termOpen && 'collapsed')} style={termOpen ? { height } : undefined}>
+    <section className={cx('dock', !termOpen && 'collapsed')} style={away ? { display: 'none' } : termOpen ? { height } : undefined}>
       {termOpen && <div className="dock-grip" onMouseDown={e => { drag.current = { y: e.clientY, h: height }; document.body.classList.add('resizing') }} />}
       <header className="dock-head">
         <button className="dock-title" onClick={() => setTermOpen(!termOpen)}>
           <SquareTerminal size={14} /> Terminal
         </button>
         <div className="dock-tabs">
-          {termSessions.map(s => {
+          {mine.map(s => {
             const t = sessionTicket(s)
             const n = s.split('#')[1]
             const act = termActivity[s]
@@ -247,10 +257,33 @@ export function TerminalDock() {
           })}
           {workTicket && (
             <button className="dock-tab add" title={`New terminal for ${workTicket}`} onClick={() => openTerminal(workTicket, { fresh: ticketSessions(workTicket).length > 0 })}>
-              <Plus size={12} /> {workTicket}
+              <Plus size={12} /> {mine.length ? 'new' : workTicket}
             </button>
           )}
         </div>
+        {others.length > 0 && (
+          <div className="dock-others">
+            <button className={cx('dock-tab', 'others-btn', othersOpen && 'on')} title="Terminals of other tickets" onClick={() => setOthersOpen(o => !o)}>
+              {others.slice(0, 4).map(t => <TicketDot key={t} ticket={t} />)}
+              {others.length} other{others.length === 1 ? '' : 's'} <ChevronDown size={11} />
+            </button>
+            {othersOpen && (
+              <div className="others-menu" onMouseLeave={() => setOthersOpen(false)}>
+                {others.map(t => {
+                  const ss = termSessions.filter(s => sessionTicket(s) === t)
+                  return (
+                    <button key={t} onClick={() => { setOthersOpen(false); selectSession(ss[ss.length - 1]) }}>
+                      <TicketDot ticket={t} />
+                      <span className="mono">{t}</span>
+                      <span className="om-sum">{issues[t]?.security ? '🔒 secured' : issues[t]?.summary}</span>
+                      {ss.length > 1 && <span className="tab-n">×{ss.length}</span>}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
         <span className="spacer" />
         <span className="muted small dock-hint">Ctrl+` · Ctrl+Shift+T new</span>
         <button className="icon-btn" onClick={() => setTermOpen(!termOpen)}>{termOpen ? <ChevronDown size={15} /> : <ChevronUp size={15} />}</button>
@@ -265,7 +298,7 @@ export function TerminalDock() {
           {branch && <span className="ctx-branch mono"><GitBranch size={12} /> {branch}</span>}
           <span className="spacer" />
           <div className="ctx-chips">
-            {chips.filter(c => c.show).map(c => (
+            {active && chips.filter(c => c.show).map(c => (
               <button key={c.label} className="ctx-chip" title={c.cmd} onClick={() => insert(c.cmd)}>{c.label}</button>
             ))}
           </div>
@@ -273,8 +306,18 @@ export function TerminalDock() {
       )}
 
       <div className="dock-body" style={{ display: termOpen ? undefined : 'none' }}>
-        {termSessions.map(s => <TermPane key={s} session={s} active={s === active} />)}
-        {!termSessions.length && <div className="dock-empty">Pick a ticket to open its terminal.</div>}
+        {termSessions.map(s => <TermPane key={s} session={s} active={s === active} banner={banner} />)}
+        {!active && (
+          <div className="dock-empty">
+            {ticketKey ? (
+              <>
+                <span>No terminal for <b className="mono">{ticketKey}</b> yet.</span>
+                <button className="btn primary small" onClick={() => openTerminal(ticketKey)}><SquareTerminal size={13} /> Open terminal</button>
+                <span className="muted small">Ctrl+` or Ctrl+Shift+T</span>
+              </>
+            ) : 'Pick a ticket to open its terminal.'}
+          </div>
+        )}
       </div>
     </section>
   )
@@ -284,6 +327,13 @@ export function TerminalDock() {
 export function TermLight({ light, fallbackTone, size = 8 }: { light: TermLightState; fallbackTone?: string; size?: number }) {
   if (light.state === 'idle') return <span className={cx('dot', fallbackTone ? `tone-${fallbackTone}` : 'term-idle')} />
   return <span className={cx('term-light', `tl-${light.state}`)} style={{ width: size, height: size }} />
+}
+
+/** Small light for a ticket in the "other terminals" menu. */
+function TicketDot({ ticket }: { ticket: string }) {
+  const { termSessions, termActivity, issues } = useStore()
+  const light = ticketLight(ticket, termSessions, termActivity) ?? { state: 'idle' as const }
+  return <TermLight light={light} fallbackTone={statusTone(issues[ticket]?.status ?? '')} size={7} />
 }
 
 /** Light for a ticket across all its terminals; nothing if it has none. */

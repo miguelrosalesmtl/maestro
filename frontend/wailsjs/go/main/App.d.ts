@@ -3,6 +3,7 @@
 import {tracker} from '../models';
 import {flow} from '../models';
 import {main} from '../models';
+import {devsync} from '../models';
 import {config} from '../models';
 
 export function AddComment(arg1:string,arg2:string):Promise<tracker.Issue>;
@@ -20,6 +21,8 @@ export function GetCreateFieldSpecs(arg1:string,arg2:tracker.IssueType):Promise<
 export function GetFieldSpecs(arg1:string):Promise<Array<tracker.FieldSpec>>;
 
 export function GetFlow(arg1:string):Promise<flow.Flow>;
+
+export function GetGitHubStatus():Promise<devsync.Status>;
 
 export function GetIssue(arg1:string):Promise<tracker.Issue>;
 

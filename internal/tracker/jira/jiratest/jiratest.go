@@ -31,8 +31,29 @@ type Server struct {
 	Edits     []map[string]any // PUT /issue/{key} payloads
 	recent    map[string]bool  // keys returned by "updated >= -Nm" searches
 	posts     int
-	LinkSwaps bool // true: this server applies POST /issueLink inward/outward the other way
+	LinkSwaps bool                             // true: this server applies POST /issueLink inward/outward the other way
+	remote    map[string]map[string]RemoteLink // key → globalId → link
 	srv       *httptest.Server
+}
+
+// RemoteLink is a stored web link (POST /issue/{key}/remotelink).
+type RemoteLink struct {
+	GlobalID string
+	URL      string
+	Title    string
+	Resolved bool
+	Posts    int // writes of this globalId
+}
+
+// RemoteLinks returns the web links of an issue, by globalId.
+func (f *Server) RemoteLinks(key string) map[string]RemoteLink {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := map[string]RemoteLink{}
+	for id, l := range f.remote[key] {
+		out[id] = l
+	}
+	return out
 }
 
 // Link is a stored issue link: Outward <outward phrase> Inward.
@@ -280,6 +301,28 @@ func (f *Server) serve(w http.ResponseWriter, r *http.Request) {
 	case r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/comment"):
 		w.WriteHeader(201)
 		reply(map[string]any{"id": "c2"})
+	case r.Method == "POST" && strings.HasSuffix(r.URL.Path, "/remotelink"):
+		key := strings.TrimSuffix(strings.TrimPrefix(r.URL.Path, "/rest/api/3/issue/"), "/remotelink")
+		var body struct {
+			GlobalID string `json:"globalId"`
+			Object   struct {
+				URL, Title string
+				Status     *struct{ Resolved bool }
+			}
+		}
+		json.NewDecoder(r.Body).Decode(&body)
+		if f.remote == nil {
+			f.remote = map[string]map[string]RemoteLink{}
+		}
+		if f.remote[key] == nil {
+			f.remote[key] = map[string]RemoteLink{}
+		}
+		l := f.remote[key][body.GlobalID]
+		l.GlobalID, l.URL, l.Title, l.Posts = body.GlobalID, body.Object.URL, body.Object.Title, l.Posts+1
+		l.Resolved = body.Object.Status != nil && body.Object.Status.Resolved
+		f.remote[key][body.GlobalID] = l
+		w.WriteHeader(201)
+		reply(map[string]any{"id": 1, "self": "x"})
 	case r.Method == "GET" && strings.HasPrefix(r.URL.Path, "/rest/api/3/issue/"):
 		key := strings.TrimPrefix(r.URL.Path, "/rest/api/3/issue/")
 		if _, ok := f.issues[key]; !ok {

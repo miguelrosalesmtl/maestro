@@ -24,7 +24,7 @@ type SearchOptions struct {
 	PageSize int // ≤ 100, default 100
 }
 
-// Search is. Cloud uses /search/jql with nextPageToken (the old
+// Search runs a JQL search. Cloud uses /search/jql with nextPageToken (the old
 // /search endpoint is removed on Cloud); Data Center uses /search with startAt.
 func (c *Client) Search(ctx context.Context, o SearchOptions) iter.Seq2[Issue, error] {
 	if len(o.Fields) == 0 {
@@ -100,7 +100,7 @@ func (c *Client) IssuesByKey(ctx context.Context, keys []string, fields []string
 	return out, nil
 }
 
-// Issue is. fields nil = all navigable fields.
+// Issue reads one issue. fields nil = all navigable fields.
 func (c *Client) Issue(ctx context.Context, key string, fields []string, expand ...string) (*Issue, error) {
 	q := url.Values{}
 	if len(fields) > 0 {
@@ -123,7 +123,7 @@ func (c *Client) Children(ctx context.Context, parentKey string, fields []string
 	return c.Search(ctx, SearchOptions{JQL: fmt.Sprintf("parent = %s ORDER BY rank", parentKey), Fields: fields})
 }
 
-// Transitions is, with the fields each transition screen requires (WFL-05).
+// Transitions lists the transitions available on an issue, with the fields each transition screen requires (WFL-05).
 func (c *Client) Transitions(ctx context.Context, key string) ([]Transition, error) {
 	var out struct {
 		Transitions []Transition `json:"transitions"`
@@ -132,7 +132,7 @@ func (c *Client) Transitions(ctx context.Context, key string) ([]Transition, err
 	return out.Transitions, c.get(ctx, c.platform("/issue/"+url.PathEscape(key)+"/transitions"), q, &out)
 }
 
-// Comments is, newest first.
+// Comments lists comments, newest first.
 func (c *Client) Comments(ctx context.Context, key string) iter.Seq2[Comment, error] {
 	q := url.Values{"orderBy": {"-created"}, "expand": {"renderedBody"}}
 	return func(yield func(Comment, error) bool) {
@@ -245,13 +245,13 @@ func (c *Client) CreateIssue(ctx context.Context, in CreateInput) (*CreatedIssue
 	return &out, c.send(ctx, http.MethodPost, c.platform("/issue"), map[string]any{"fields": f}, &out)
 }
 
-// EditIssue is. fields are raw Jira field values.
+// EditIssue edits fields of an issue. fields are raw Jira field values.
 func (c *Client) EditIssue(ctx context.Context, key string, fields map[string]any) error {
 	return c.do(ctx, request{method: http.MethodPut, path: c.platform("/issue/" + url.PathEscape(key)),
 		query: url.Values{"notifyUsers": {"true"}}, body: map[string]any{"fields": fields}})
 }
 
-// Assign is. An empty id unassigns.
+// Assign assigns an issue. An empty id unassigns.
 func (c *Client) Assign(ctx context.Context, key, userID string) error {
 	var body any = map[string]any{"accountId": nil}
 	if userID != "" {
@@ -262,7 +262,7 @@ func (c *Client) Assign(ctx context.Context, key, userID string) error {
 	return c.send(ctx, http.MethodPut, c.platform("/issue/"+url.PathEscape(key)+"/assignee"), body, nil)
 }
 
-// DoTransition is. fields carries the screen values the transition
+// DoTransition moves an issue through a transition. fields carries the screen values the transition
 // requires (see Transition.RequiredFields), e.g. {"resolution":{"name":"Done"}}.
 func (c *Client) DoTransition(ctx context.Context, key, transitionID string, fields map[string]any) error {
 	body := map[string]any{"transition": map[string]string{"id": transitionID}}
@@ -278,7 +278,7 @@ func (c *Client) AddComment(ctx context.Context, key, markdown string) (*Comment
 	return &out, c.send(ctx, http.MethodPost, c.platform("/issue/"+url.PathEscape(key)+"/comment"), map[string]any{"body": c.richText(markdown)}, &out)
 }
 
-// LinkIssues is. The arguments mirror the REST payload exactly: Jira
+// LinkIssues links two issues. The arguments mirror the REST payload exactly: Jira
 // decides which side reads "blocks" and which "is blocked by" from
 // inwardIssue/outwardIssue. Verify the direction with a contract test
 // (§14) before mapping Maestro's "A blocks B" onto it.
@@ -296,13 +296,13 @@ func (c *Client) DeleteIssueLink(ctx context.Context, linkID string) error {
 	return c.send(ctx, http.MethodDelete, c.platform("/issueLink/"+url.PathEscape(linkID)), nil, nil)
 }
 
-// UpsertRemoteLink is. The same GlobalID (the PR URL) updates the link.
+// UpsertRemoteLink adds or updates a web link on an issue. The same GlobalID (the PR URL) updates the link.
 // It is safe to retry, so it is marked idempotent.
 func (c *Client) UpsertRemoteLink(ctx context.Context, key string, link RemoteLink) error {
 	return c.do(ctx, request{method: http.MethodPost, path: c.platform("/issue/" + url.PathEscape(key) + "/remotelink"), body: link, idempotent: link.GlobalID != ""})
 }
 
-// MoveToSprint is, in chunks of 50 issues.
+// MoveToSprint moves issues into a sprint, in chunks of 50 issues.
 func (c *Client) MoveToSprint(ctx context.Context, sprintID int, keys []string) error {
 	for start := 0; start < len(keys); start += 50 {
 		chunk := keys[start:min(start+50, len(keys))]
@@ -324,7 +324,7 @@ func (c *Client) MoveToBacklog(ctx context.Context, keys []string) error {
 	return nil
 }
 
-// Rank is. Give exactly one of before or after.
+// Rank reorders an issue on the board. Give exactly one of before or after.
 func (c *Client) Rank(ctx context.Context, key, before, after string) error {
 	if (before == "") == (after == "") {
 		return errors.New("jira: rank needs exactly one of before or after")

@@ -270,9 +270,9 @@ export function JiraIssueView() {
                   <dd className="jira-dev">
                     {flow?.started ? (
                       <>
-                        <span><GitBranch size={13} /> <a onClick={() => api.openURL(`https://github.com/${flow.repo}/tree/${flow.branch}`)}>1 branch</a></span>
+                        <span><GitBranch size={13} /> <a title={flow.branch} onClick={() => api.openURL(`${flow.pr?.url.replace(/\/pull\/\d+$/, '') ?? `https://github.com/${flow.repo}`}/tree/${flow.branch}`)}>1 branch</a></span>
                         <span><GitCommitHorizontal size={13} /> <a>{flow.commits.length} commits</a> <em>{flow.commits.at(-1) && timeAgo(flow.commits.at(-1)!.at)}</em></span>
-                        {flow.pr && <span><GitPullRequest size={13} /> <a onClick={() => api.openURL(flow.pr!.url)}>1 pull request</a> <i className={cx('jira-lozenge', flow.pr.state === 'merged' ? 'lz-done' : 'lz-inprogress')}>{flow.pr.state.toUpperCase()}</i></span>}
+                        {flow.pr && <span><GitPullRequest size={13} /> <a title={flow.pr.title} onClick={() => api.openURL(flow.pr!.url)}>#{flow.pr.number}</a> <i className={cx('jira-lozenge', flow.pr.state === 'merged' ? 'lz-done' : flow.pr.state === 'closed' || flow.pr.draft ? 'lz-todo' : 'lz-inprogress')}>{flow.pr.draft && flow.pr.state === 'open' ? 'DRAFT' : flow.pr.state.toUpperCase()}</i></span>}
                       </>
                     ) : <span className="jira-muted">Create branch</span>}
                   </dd>

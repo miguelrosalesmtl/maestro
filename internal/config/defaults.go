@@ -37,7 +37,7 @@ func Default() *Config {
 				MergeMethod:   "squash",
 			},
 			Review: Review{RequiredApprovals: 1},
-			GitHub: GitHub{Auth: "gh", APIURL: "https://api.github.com"},
+			GitHub: GitHub{Auth: "gh", APIURL: "https://api.github.com", PollSeconds: 60},
 		},
 		Automation: Automation{
 			Rules: []Rule{

@@ -213,6 +213,7 @@ func validateDev(c *collector, d *Dev) {
 	}
 	between(c, "dev.review.requiredApprovals", d.Review.RequiredApprovals, 0, 10)
 	oneOf(c, "dev.github.auth", d.GitHub.Auth, "gh", "token")
+	between(c, "dev.github.pollSeconds", d.GitHub.PollSeconds, 15, 3600)
 	if u, err := url.Parse(d.GitHub.APIURL); err != nil || u.Scheme != "https" {
 		c.errorf("dev.github.apiUrl", "must be an https URL")
 	}

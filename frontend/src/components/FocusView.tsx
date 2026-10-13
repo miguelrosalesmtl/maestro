@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowUpRight, Link2, Plus, Copy, ExternalLink, FastForward, SquareTerminal, GitBranch, GitPullRequest, Play, RotateCcw, Sparkles, Terminal, Zap, GitMerge, CircleDot, Check, Loader2 } from 'lucide-react'
+import { ArrowUpRight, Link2, Plus, Copy, ExternalLink, FastForward, SquareTerminal, GitBranch, GitPullRequest, Play, RotateCcw, Sparkles, Terminal, Zap, GitMerge, CircleDot, Check, Loader2, X, GitPullRequestClosed, GitPullRequestDraft } from 'lucide-react'
 import { api } from '../api'
 import { useStore } from '../store'
 import type { FlowEvent } from '../types'
@@ -115,7 +115,7 @@ export function FocusView() {
             {live ? (
               <button className="btn primary big" onClick={() => startLive(issue.key, issue.security ? '' : issue.summary, issue.type)}>
                 {flow.started ? <SquareTerminal size={16} /> : <Play size={16} fill="currentColor" />} {flow.started ? 'Continue in terminal' : 'Start work'}
-                <small>{flow.started ? 'git push · gh pr create move the ticket' : 'types git checkout -b · Enter moves it to In Progress'}</small>
+                <small>{flow.started ? (flow.live ? 'pull requests on GitHub move the ticket' : 'git push · gh pr create move the ticket') : 'types git checkout -b · Enter moves it to In Progress'}</small>
               </button>
             ) : !flow.started ? (
               <button className="btn primary big" onClick={() => startWork(issue.key)}>
@@ -157,22 +157,40 @@ export function FocusView() {
               </div>
 
               {flow.pr && (
-                <div className={cx('pr-card', flow.pr.state)} onClick={() => api.openURL(flow.pr!.url)}>
+                <div className={cx('pr-card', flow.pr.state, flow.pr.draft && flow.pr.state === 'open' && 'draft')} onClick={() => api.openURL(flow.pr!.url)}>
                   <div className="pr-top">
-                    {flow.pr.state === 'merged' ? <GitMerge size={16} /> : <GitPullRequest size={16} />}
+                    {flow.pr.state === 'merged' ? <GitMerge size={16} /> : flow.pr.state === 'closed' ? <GitPullRequestClosed size={16} /> : flow.pr.draft ? <GitPullRequestDraft size={16} /> : <GitPullRequest size={16} />}
                     <span className="pr-title">{flow.pr.title}</span>
                     <span className="pr-num">#{flow.pr.number}</span>
                     <ArrowUpRight size={14} className="muted" />
                   </div>
                   <div className="pr-bottom">
-                    <span className={cx('pr-state', flow.pr.state)}>{flow.pr.state}</span>
+                    <span className={cx('pr-state', flow.pr.draft && flow.pr.state === 'open' ? 'draft' : flow.pr.state)}>{flow.pr.draft && flow.pr.state === 'open' ? 'draft' : flow.pr.state}</span>
                     {flow.pr.checks.map(c => (
-                      <span key={c.name} className={cx('check', `state-${c.state}`)}>
-                        {c.state === 'done' ? <Check size={11} strokeWidth={3} /> : <Loader2 size={11} className="spin" />} {c.name}
+                      <span key={c.name} className={cx('check', `state-${c.state}`, c.required && 'required', c.url && 'has-url')}
+                        title={`${c.name}${c.required ? ' (required)' : ''}`}
+                        onClick={c.url ? e => { e.stopPropagation(); void api.openURL(c.url!) } : undefined}>
+                        {c.state === 'done' ? <Check size={11} strokeWidth={3} /> : c.state === 'failed' ? <X size={11} strokeWidth={3} /> : <Loader2 size={11} className="spin" />} {c.name}
                       </span>
                     ))}
-                    <span className="approvals">{flow.pr.approvals}/{flow.pr.reviewers.length} approvals</span>
+                    {flow.pr.live && !flow.pr.checks.length && <span className="check">no checks</span>}
+                    <span className="approvals" title={[
+                      flow.pr.approvedBy?.length ? `Approved by ${flow.pr.approvedBy.join(', ')}` : '',
+                      flow.pr.reviewers.length ? `Reviewers: ${flow.pr.reviewers.join(', ')}` : '',
+                    ].filter(Boolean).join('\n')}>
+                      {flow.pr.changesRequested?.length
+                        ? <b className="changes">changes requested · {flow.pr.changesRequested.join(', ')}</b>
+                        : <>{flow.pr.approvals}/{flow.pr.requiredApprovals || flow.pr.reviewers.length} approvals</>}
+                    </span>
                   </div>
+                  {flow.pr.live && (
+                    <div className="pr-meta">
+                      <span className="mono">{flow.pr.repo}</span>
+                      {flow.pr.head && <span className="mono">{flow.pr.head} → {flow.pr.base}</span>}
+                      {flow.pr.author && <span>by @{flow.pr.author}</span>}
+                      {flow.pr.updatedAt && <span>updated {timeAgo(flow.pr.mergedAt || flow.pr.updatedAt)}</span>}
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -182,7 +200,7 @@ export function FocusView() {
                     <CircleDot size={13} className="commit-dot" />
                     <span className="mono sha">{c.sha}</span>
                     <span className="commit-msg">{c.message}</span>
-                    <span className="diff"><b className="add">+{c.adds}</b> <b className="del">−{c.dels}</b></span>
+                    {(c.adds > 0 || c.dels > 0) && <span className="diff"><b className="add">+{c.adds}</b> <b className="del">−{c.dels}</b></span>}
                     <span className="muted small">{timeAgo(c.at)}</span>
                   </div>
                 ))}

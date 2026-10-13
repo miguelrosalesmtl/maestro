@@ -71,6 +71,12 @@ func shell() string {
 // Open starts (or reattaches to) the shell for a ticket. It returns true when
 // a new session was created.
 // SessionTicket returns the ticket key of a session ID ("PLAT-142#2" → "PLAT-142").
+// FreestylePrefix marks terminals that belong to no ticket ("free:1"):
+// no ticket env vars, and their commands never drive a ticket's flow.
+const FreestylePrefix = "free:"
+
+func IsFreestyle(session string) bool { return strings.HasPrefix(session, FreestylePrefix) }
+
 func SessionTicket(session string) string {
 	if i := strings.IndexByte(session, '#'); i > 0 {
 		return session[:i]
@@ -93,13 +99,10 @@ func (m *Manager) Open(c Context, cols, rows uint16) (bool, error) {
 	}
 	cmd := exec.Command(shell(), "-l")
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(),
-		"TERM=xterm-256color",
-		"COLORTERM=truecolor",
-		"MAESTRO_TICKET="+c.Key,
-		"MAESTRO_SUMMARY="+c.Summary,
-		"MAESTRO_BRANCH="+c.Branch,
-	)
+	cmd.Env = append(os.Environ(), "TERM=xterm-256color", "COLORTERM=truecolor")
+	if c.Key != "" {
+		cmd.Env = append(cmd.Env, "MAESTRO_TICKET="+c.Key, "MAESTRO_SUMMARY="+c.Summary, "MAESTRO_BRANCH="+c.Branch)
+	}
 	f, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: cols, Rows: rows})
 	if err != nil {
 		return false, fmt.Errorf("start shell: %w", err)
@@ -173,7 +176,7 @@ func (m *Manager) Write(key, data string) error {
 		s.line = s.line[:0]
 	}
 	_, err := s.pty.WriteString(data)
-	if m.hooks.OnCommand != nil {
+	if m.hooks.OnCommand != nil && !IsFreestyle(key) {
 		for _, l := range done {
 			m.hooks.OnCommand(key, l)
 		}

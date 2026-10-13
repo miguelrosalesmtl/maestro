@@ -204,7 +204,7 @@ export function LinkHints({ mode, onPick, onClose }: {
           <b>{h.label.slice(0, typed.length)}</b>{h.label.slice(typed.length)}
         </span>
       ))}
-      <div className="hints-bar">{mode === 'ticket' ? 'Pick a ticket to open in Jira view' : 'Type a hint to click'} · <kbd className="kbd">Esc</kbd> cancel</div>
+      <div className="hints-bar">{mode === 'ticket' ? 'Type a hint to open that ticket' : 'Type a hint to click'} · <kbd className="kbd">Esc</kbd> cancel</div>
     </div>
   )
 }

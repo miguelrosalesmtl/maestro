@@ -107,11 +107,15 @@ dev:
     titleTemplate: "[{key}] {summary}"           # DEV-04
     bodyTemplate: "Jira: {url}"                  # DEV-05
     mergeMethod: squash                          # DEV-06
+  checks:
+    required: [build]                            # DEV-07; empty = every check counts
   review:
     requiredApprovals: 1                         # DEV-08
   github:
-    auth: gh                                     # gh | token
-    apiUrl: https://api.github.com
+    enabled: true                                # follow pull requests of projects[].repos
+    auth: gh                                     # gh (uses `gh auth token`) | token (keychain, maestro-jira github-login)
+    apiUrl: https://api.github.com               # GitHub Enterprise: https://HOST/api/v3
+    pollSeconds: 60                              # 15–3600; every 15 s for 2 min after git/gh in a ticket terminal
 
 automation:
   assignOnStart: true

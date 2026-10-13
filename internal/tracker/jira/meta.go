@@ -18,7 +18,7 @@ func (c *Client) Myself(ctx context.Context) (*User, error) {
 	return &u, c.get(ctx, c.platform("/myself"), nil, &u)
 }
 
-// ServerInfo is. Its ServerTime is the clock for incremental sync.
+// ServerInfo returns the server version, deployment type and clock. Its ServerTime is the clock for incremental sync.
 func (c *Client) ServerInfo(ctx context.Context) (*ServerInfo, error) {
 	var s ServerInfo
 	return &s, c.get(ctx, c.platform("/serverInfo"), nil, &s)
@@ -74,7 +74,7 @@ func (c *Client) CreateMeta(ctx context.Context, projectKey, issueTypeID string)
 	return append(page.Fields, page.Values...), nil
 }
 
-// Statuses is. projectID may be empty for all statuses.
+// Statuses lists statuses. projectID may be empty for all statuses.
 func (c *Client) Statuses(ctx context.Context, projectID string) iter.Seq2[StatusDef, error] {
 	if c.deployment == DataCenter {
 		return func(yield func(StatusDef, error) bool) {
@@ -160,7 +160,7 @@ func (c *Client) EditMeta(ctx context.Context, key string) (map[string]CreateMet
 	return out.Fields, nil
 }
 
-// TimeTrackingConfig is. Enabled is false when time tracking is off.
+// TimeTrackingConfig returns the time tracking settings. Enabled is false when time tracking is off.
 type TimeTrackingConfig struct {
 	Enabled            bool    `json:"enabled"`
 	WorkingHoursPerDay float64 `json:"workingHoursPerDay"`
@@ -207,7 +207,7 @@ var WritePermissions = []string{
 	"ASSIGN_ISSUES", "ADD_COMMENTS", "CREATE_ATTACHMENTS", "SCHEDULE_ISSUES",
 }
 
-// MyPermissions is. The result maps permission key → granted.
+// MyPermissions reports the current user's permissions in a project. The result maps permission key → granted.
 func (c *Client) MyPermissions(ctx context.Context, projectKey string, keys []string) (map[string]bool, error) {
 	var out struct {
 		Permissions map[string]Permission `json:"permissions"`
@@ -240,7 +240,7 @@ func (c *Client) Filter(ctx context.Context, id string) (*Filter, error) {
 	return &f, c.get(ctx, c.platform("/filter/"+url.PathEscape(id)), nil, &f)
 }
 
-// Sprints is. states: e.g. "active", "future".
+// Sprints lists a board's sprints. states: e.g. "active", "future".
 func (c *Client) Sprints(ctx context.Context, boardID int, states ...string) iter.Seq2[Sprint, error] {
 	q := url.Values{}
 	if len(states) > 0 {

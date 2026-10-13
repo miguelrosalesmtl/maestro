@@ -289,9 +289,13 @@ type Review struct {
 }
 
 type GitHub struct {
-	Auth   string `yaml:"auth,omitempty"` // gh | token
-	APIURL string `yaml:"apiUrl,omitempty"`
+	Enabled     *bool  `yaml:"enabled,omitempty"`     // watch pull requests (default true when repos are configured)
+	Auth        string `yaml:"auth,omitempty"`        // gh (use `gh auth token`) | token (keychain)
+	APIURL      string `yaml:"apiUrl,omitempty"`      // https://api.github.com, or GitHub Enterprise …/api/v3
+	PollSeconds int    `yaml:"pollSeconds,omitempty"` // how often to check pull requests
 }
+
+func (g GitHub) IsEnabled() bool { return g.Enabled == nil || *g.Enabled }
 
 // Trigger is a dev event that can drive an automation rule.
 type Trigger string

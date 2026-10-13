@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"maestro/internal/config"
+	"maestro/internal/devsync"
 	"maestro/internal/flow"
 	"maestro/internal/secrets"
 	"maestro/internal/setup"
@@ -79,7 +80,7 @@ func (a *App) connect() {
 	}
 
 	rules, repo := liveRules(a.cfg, lt.Meta())
-	fl := flow.NewEngineWith(lt, flow.Options{Rules: rules, Repo: repo})
+	fl := flow.NewEngineWith(lt, flow.Options{Rules: rules, Repo: repo, Poke: a.pokeDev})
 	st := lt.Status()
 	conn.Mode, conn.State, conn.LastSync, conn.Issues = "live", string(st.State), st.LastSync, st.Issues
 	a.mu.Lock()
@@ -88,6 +89,7 @@ func (a *App) connect() {
 	close(a.ready)
 	a.log.Info("tracker ready", "mode", "live", "site", conn.Site, "issues", st.Issues)
 	a.emit("tracker:connection", a.GetConnection())
+	a.startDevSync(fl, lt, lt.Has)
 }
 
 func (a *App) startLive() (*live.Tracker, error) {
@@ -122,6 +124,7 @@ func (a *App) useDemo(conn Connection, reason string) {
 	close(a.ready)
 	a.log.Info("tracker ready", "mode", "demo", "reason", reason)
 	a.emit("tracker:connection", a.GetConnection())
+	a.setGitHubStatus(devsync.Status{State: "off", Error: "Demo mode: pull requests are followed once Jira is connected."})
 }
 
 func (a *App) setConn(c Connection) {

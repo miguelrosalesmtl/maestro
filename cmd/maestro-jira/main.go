@@ -6,6 +6,7 @@
 //	go run ./cmd/maestro-jira discover [-apply] [-json] [-projects PLAT,ONB]
 //	go run ./cmd/maestro-jira detect <site>
 //	go run ./cmd/maestro-jira logout
+//	go run ./cmd/maestro-jira github-login     # GitHub token → keychain (instead of gh)
 package main
 
 import (
@@ -25,6 +26,7 @@ import (
 	"golang.org/x/term"
 
 	"maestro/internal/config"
+	"maestro/internal/github"
 	"maestro/internal/secrets"
 	"maestro/internal/setup"
 	"maestro/internal/tracker/jira"
@@ -40,6 +42,7 @@ func main() {
 
 	cmds := map[string]func(context.Context, []string) error{
 		"detect": detect, "login": login, "check": check, "discover": discover, "logout": logout,
+		"github-login": githubLogin,
 	}
 	run, ok := cmds[os.Args[1]]
 	if !ok {
@@ -53,7 +56,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: maestro-jira <login|check|discover|detect|logout> [flags]")
+	fmt.Fprintln(os.Stderr, "usage: maestro-jira <login|check|discover|detect|logout|github-login> [flags]")
 }
 
 // explain turns typed errors into the messages the spec asks for.
@@ -254,6 +257,96 @@ func check(ctx context.Context, args []string) error {
 			fmt.Printf("! %-9s missing %s\n", p.Key, strings.Join(missing, ", "))
 		}
 	}
+	checkGitHub(ctx, l.Effective)
+	return nil
+}
+
+// checkGitHub reports GitHub sign-in and access to each configured repo.
+// Problems are printed, not returned: Jira works without GitHub.
+func checkGitHub(ctx context.Context, cfg *config.Config) {
+	gh := cfg.Dev.GitHub
+	var repos []string
+	for _, p := range cfg.Projects {
+		for _, r := range p.Repos {
+			repos = append(repos, r.Name)
+		}
+	}
+	switch {
+	case !gh.IsEnabled():
+		fmt.Println("- github    off (dev.github.enabled: false)")
+		return
+	case len(repos) == 0:
+		fmt.Println("- github    no repositories in projects[].repos; pull requests are not followed")
+		return
+	}
+	host := github.WebHost(gh.APIURL)
+	var tokens github.TokenSource = github.GHCLI{Host: host}
+	if gh.Auth == "token" {
+		tokens = github.Keychain{Store: secrets.NewStore(), Ref: secrets.GitHubRef(host)}
+	}
+	c, err := github.New(github.Options{APIURL: gh.APIURL, Tokens: tokens, UserAgent: "maestro-jira"})
+	if err != nil {
+		fmt.Printf("✗ github    %v\n", err)
+		return
+	}
+	u, err := c.Viewer(ctx)
+	if err != nil {
+		fmt.Printf("✗ github    %v\n", githubHint(err, gh.Auth, host))
+		return
+	}
+	fmt.Printf("✓ github    @%s on %s (auth: %s)\n", u.Login, host, gh.Auth)
+	for _, r := range repos {
+		prs, err := c.OpenPullRequests(ctx, r)
+		if err != nil {
+			fmt.Printf("✗ %-9s %v\n", "repo", githubHint(err, gh.Auth, host))
+			continue
+		}
+		fmt.Printf("✓ %-9s %s · %d open pull requests\n", "repo", r, len(prs))
+	}
+}
+
+func githubHint(err error, auth, host string) string {
+	switch {
+	case errors.Is(err, secrets.ErrNotFound):
+		return "GitHub token not found in the keychain. Run: maestro-jira github-login"
+	case errors.Is(err, github.ErrNotFound):
+		return err.Error() + " (check the owner/name, and that the token can read this repository)"
+	case errors.Is(err, github.ErrUnauthorized) && auth == "token":
+		return "GitHub token rejected. Run: maestro-jira github-login"
+	}
+	return err.Error()
+}
+
+// githubLogin stores a GitHub token in the keychain, for dev.github.auth: token.
+func githubLogin(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("github-login", flag.ExitOnError)
+	apiURL := fs.String("api", "", "API URL (GitHub Enterprise: https://HOST/api/v3); default from config")
+	fs.Parse(args)
+	if *apiURL == "" {
+		if path, err := config.PersonalPath(); err == nil {
+			if l, _ := config.Load(path); l != nil {
+				*apiURL = l.Effective.Dev.GitHub.APIURL
+			}
+		}
+	}
+	host := github.WebHost(*apiURL)
+	fmt.Printf("Create a fine-grained token on %s with read access to Pull requests, Checks,\nCommit statuses and Contents of your repositories.\n", host)
+	tok, err := readSecret(bufio.NewReader(os.Stdin), "Token: ")
+	if err != nil || tok == "" {
+		return errors.New("no token entered")
+	}
+	c, err := github.New(github.Options{APIURL: *apiURL, Tokens: github.Static(tok.Reveal()), UserAgent: "maestro-jira"})
+	if err != nil {
+		return err
+	}
+	u, err := c.Viewer(ctx)
+	if err != nil {
+		return err
+	}
+	if err := secrets.NewStore().Set(secrets.GitHubRef(host), tok); err != nil {
+		return err
+	}
+	fmt.Printf("Signed in as @%s. Token saved in the keychain.\nSet dev.github.auth: token in config.yaml to use it (the default, gh, uses `gh auth token`).\n", u.Login)
 	return nil
 }
 

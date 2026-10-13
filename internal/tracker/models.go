@@ -273,6 +273,20 @@ type Meta struct {
 
 // Tracker is what the UI talks to: the in-memory Mock or the live Jira adapter
 // (internal/tracker/live).
+// PRLink is a pull request to show as a web link on an issue.
+type PRLink struct {
+	URL    string
+	Repo   string // owner/name
+	Number int
+	Title  string
+	State  string // open | merged | closed
+}
+
+// PRLinker is implemented by trackers that can store PR links (live Jira).
+type PRLinker interface {
+	LinkPullRequest(key string, pr PRLink) error
+}
+
 type Tracker interface {
 	Meta() Meta
 	CurrentUser() User
