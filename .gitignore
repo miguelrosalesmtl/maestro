@@ -1,0 +1,13 @@
+# Build output
+build/bin
+frontend/dist
+frontend/package.json.md5
+
+# Dependencies
+node_modules
+
+# Local / OS files
+.DS_Store
+*.log
+.wsedit-*
+.config-*.yaml

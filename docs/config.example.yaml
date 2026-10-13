@@ -1,0 +1,147 @@
+# Maestro configuration — reference example.
+#
+# Personal file: <config dir>/maestro/config.yaml
+#   (~/.config/maestro on Linux, ~/Library/Application Support/maestro on macOS)
+# Shared team file: any path, referenced with teamFile. Personal values win.
+#
+# Never put a token or password here. Store it in the OS keychain and reference it
+# with jira.auth.credentialRef. Spec IDs (CON-01, WFL-10, …) refer to
+# docs/jira-configuration-spec.md.
+version: 1
+# teamFile: ~/code/platform/maestro.team.yaml
+
+jira:
+  site: https://your-org.atlassian.net          # CON-01
+  deployment: cloud                              # CON-02 (discovered)
+  transport: rest                                # rest | mcp | mock
+  auth:
+    method: apiToken                             # apiToken | scopedApiToken | pat
+    email: me@example.com                        # not a secret
+    credentialRef: keychain:maestro/jira:your-org.atlassian.net:me@example.com
+    # tokenExpires: 2027-10-13
+  http:
+    timeoutSeconds: 20
+    maxConcurrency: 4
+  # proxy: http://proxy.example.com:3128         # default: HTTPS_PROXY
+  # tls:
+  #   caFile: ~/certs/company-ca.pem
+  sync:
+    intervalSeconds: 60
+    burstSeconds: 15
+    fullResyncMinutes: 15
+    discoveryTtlHours: 24
+  writeBack:
+    remoteLinks: true
+    transitionComments: false
+
+projects:                                        # PRJ-01
+  - key: PLAT
+    board: 42                                    # BRD-01
+    repos:
+      - name: acme/platform                      # PRJ-10
+        host: github                             # PRJ-12
+        path: ~/code/platform                    # PRJ-11
+        baseBranch: main                         # PRJ-13
+  - key: ONB
+
+hierarchy:
+  initiativeProject: INIT                        # PRJ-05
+  types:                                         # HIE-03 (discovered; override here)
+    - { name: Initiative, role: initiative }
+    - { name: Epic, role: epic }
+    - { name: Story, role: story }
+    - { name: Task, role: task }
+    - { name: Bug, role: bug }
+    - { name: Subtask, role: subtask }
+
+fields:
+  storyPoints: auto                              # auto = the board's estimation field
+  # sprint: customfield_10020                    # FLD-06: discovered by schema type; set only to override
+  custom:                                        # your organization's custom fields
+    - { name: "Severity",            role: severity,           show: [view, create, column, card] }
+    - { name: "Acceptance Criteria", role: acceptanceCriteria, show: [view, create], requiredOn: [inReview] }
+    - { name: "QA Assignee",         role: qaAssignee,         show: [view] }
+    - { name: "Flagged",             role: blockedFlag,        show: [card] }
+
+workflow:
+  states:                                        # WFL-10: Jira status → Maestro state
+    "To Do": todo
+    "In Progress": inProgress
+    "In Review": inReview
+    "Blocked": blocked
+    "Done": done
+  order: ["To Do", "In Progress", "In Review", "Blocked", "Done"]   # WFL-03
+  defaultResolution: Done                        # WFL-06
+
+links:
+  blocking: Blocks                               # LNK-02
+
+defaults:
+  epicProject: PLAT                              # PRJ-04
+  priority: Medium                               # FLD-08
+  create:
+    sprint: active                               # active | next | backlog
+    fixVersion: none                             # none | next | "<version name>"
+    affectsVersion: none                         # bugs only
+
+sprints:
+  closedHistory: 3
+  velocitySprints: 3
+  allowManage: false                             # v1 reads sprints only
+  nameTemplate: "{board} Sprint {n}"
+
+versions:
+  pattern: '\d+\.\d+(\.\d+)?'
+  requireFixVersionOnDone: false
+  fromBranch: { enabled: false, template: "release/{version}" }
+  allowManage: false                             # v1 reads versions only
+  releaseNotesTemplate: "- [{key}] {summary}"
+
+dev:
+  scanDirs: [~/code, ~/src]
+  branch:
+    template: "{prefix}/{key}-{slug}"            # DEV-01
+    prefix: { bug: fix, default: feature }       # DEV-02
+    slugWords: 5                                 # DEV-03
+  pr:
+    titleTemplate: "[{key}] {summary}"           # DEV-04
+    bodyTemplate: "Jira: {url}"                  # DEV-05
+    mergeMethod: squash                          # DEV-06
+  review:
+    requiredApprovals: 1                         # DEV-08
+  github:
+    auth: gh                                     # gh | token
+    apiUrl: https://api.github.com
+
+automation:
+  assignOnStart: true
+  rules:                                         # AUT-01; "to" = Maestro state or Jira status
+    - { trigger: branch_created,    to: inProgress }
+    - { trigger: pr_opened,         to: inReview }
+    - { trigger: changes_requested, to: inProgress }
+    - { trigger: pr_merged,         to: done }
+    - { trigger: ci_failed,         to: blocked, enabled: false }
+
+agent:
+  mcp:
+    register: true
+    server: atlassian-remote                     # atlassian-remote | mcp-atlassian | none
+    url: https://mcp.atlassian.com/v1/mcp
+  shareTicketContent: false
+  shareSecuredIssues: false                      # never give secured issues to an agent
+
+ui:
+  defaultView: mine                              # LOC-02
+  keybindings:                                   # LOC-01
+    nav.board: "g b"
+
+log:
+  level: info                                    # debug | info | warn | error (env MAESTRO_LOG_LEVEL wins)
+
+terminal:
+  notify:                                        # activity light + chirp for ticket terminals
+    enabled: true
+    sound: true
+    minSeconds: 10                               # chirp when a command that ran this long finishes
+    waitSeconds: 8                               # a silent running command counts as "waiting for input"
+    # ignore: [vim, less, ssh]                   # interactive programs never notify (has a sensible default)

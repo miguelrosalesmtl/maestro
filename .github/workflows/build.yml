@@ -1,0 +1,74 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  WAILS_VERSION: v2.16.0
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with: { go-version-file: go.mod }
+      - run: go test ./internal/...
+
+  macos:
+    needs: test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with: { go-version-file: go.mod }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: go install github.com/wailsapp/wails/v2/cmd/wails@${WAILS_VERSION}
+      - run: wails build -platform darwin/universal -clean
+      - name: Zip app bundle
+        run: ditto -c -k --keepParent build/bin/Maestro.app Maestro-macos-universal.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Maestro-macos-universal
+          path: Maestro-macos-universal.zip
+
+  linux:
+    needs: test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with: { go-version-file: go.mod }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+      - run: go install github.com/wailsapp/wails/v2/cmd/wails@${WAILS_VERSION}
+      - run: wails build -tags webkit2_41 -clean
+      - name: App tests (end-to-end against a fake Jira)
+        run: go test -tags webkit2_41 -count=1 .
+      - run: tar -czf Maestro-linux-amd64.tar.gz -C build/bin maestro
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Maestro-linux-amd64
+          path: Maestro-linux-amd64.tar.gz
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [macos, linux]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { merge-multiple: true }
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            Maestro-macos-universal.zip
+            Maestro-linux-amd64.tar.gz
