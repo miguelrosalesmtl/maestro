@@ -91,7 +91,7 @@ function Workspace({ help, setHelp, hints, setHints }: {
   }, [])
 
 
-  const latest = activity[0]
+  const latest = activity?.[0]
   return (
     <div className="app">
       <div className="aurora" aria-hidden><i /><i /><i /></div>

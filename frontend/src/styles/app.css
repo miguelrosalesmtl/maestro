@@ -91,7 +91,7 @@ a { color: var(--blue); cursor: pointer; }
 /* ───────────────────────── Shell ───────────────────────── */
 .app {
   display: grid;
-  grid-template-columns: 76px 296px 1fr;
+  grid-template-columns: 76px var(--sidebar-w, 296px) 1fr;
   height: 100vh;
   position: relative;
   isolation: isolate;
@@ -144,7 +144,7 @@ html.mac .rail { padding-top: 46px; }
 
 /* Sidebar */
 .sidebar {
-  display: flex; flex-direction: column; min-height: 0;
+  position: relative; display: flex; flex-direction: column; min-height: 0; min-width: 0;
   border-right: 1px solid var(--border);
   background: rgba(12, 12, 19, .82);
 }
@@ -572,6 +572,11 @@ html.mac .sidebar-head { padding-top: 30px; }
 /* ───────────────────────── Layout fixes ───────────────────────── */
 .focus > *, .roadmap > *, .automations > * { flex-shrink: 0; }
 body.resizing { cursor: ns-resize; }
+body.resizing-x { cursor: ew-resize; user-select: none; }
+body.resizing-x * { pointer-events: none; }
+.sidebar-grip { position: absolute; top: 0; bottom: 0; right: -4px; width: 8px; z-index: 20; cursor: ew-resize; }
+.sidebar-grip::after { content: ''; position: absolute; top: 0; bottom: 0; left: 3px; width: 2px; background: var(--accent); opacity: 0; transition: opacity .15s; }
+.sidebar-grip:hover::after, body.resizing-x .sidebar-grip::after { opacity: .7; }
 body.resizing * { pointer-events: none; }
 
 /* ───────────────────────── Terminal dock ───────────────────────── */
@@ -923,7 +928,7 @@ dd:hover .edit-pen, .editable:focus-within .edit-pen { opacity: 1; }
 .kcard:hover .kcard-foot .icon-btn { display: grid; }
 
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: 0s !important; transition-delay: 0s !important; }
 }
 
 /* ───────────────────────── Freestyle terminals ───────────────────────── */
@@ -944,3 +949,29 @@ dd:hover .edit-pen, .editable:focus-within .edit-pen { opacity: 1; }
 .free-rename { flex: 1; min-width: 0; font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--accent); border-radius: 6px; padding: 2px 6px; outline: none; }
 .free-keys { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 10px 14px 14px; border-top: 1px solid var(--border); font-family: var(--mono); font-size: 10.5px; }
 .free-body { position: relative; min-width: 0; min-height: 0; background: #0b0b11; }
+
+/* People bar: me, pinned people, Everyone, Find person */
+.person { cursor: pointer; }
+.person.temp { border-style: dashed; }
+.person-pin { display: inline-grid; place-items: center; width: 16px; height: 16px; margin-right: -4px; border-radius: 50%; color: var(--text-3); opacity: 0; transition: opacity .12s; }
+.person:hover .person-pin, .person.temp .person-pin { opacity: 1; }
+.person-pin:hover { background: var(--surface-3); color: var(--text); }
+.find-person { position: relative; }
+.person.find { color: var(--text-3); }
+.people-picker {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 70; width: 320px; display: flex; flex-direction: column;
+  background: #16161f; border: 1px solid var(--border-2); border-radius: 12px; box-shadow: 0 16px 40px rgba(0,0,0,.55);
+  animation: pop .14s var(--ease) both;
+}
+.pp-search { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--text-3); }
+.pp-search input { flex: 1; background: none; border: 0; outline: none; color: var(--text); font: inherit; font-size: 13px; }
+.pp-list { max-height: 340px; overflow-y: auto; padding: 4px; }
+.pp-row { display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: 8px; cursor: pointer; font-size: 12.5px; color: var(--text-2); }
+.pp-row.sel { background: var(--surface-2); color: var(--text); }
+.pp-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pp-pin { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; color: var(--text-3); }
+.pp-pin:hover { background: var(--surface-3); color: var(--text); }
+.pp-pin.on { color: var(--accent-2); }
+.pp-empty { padding: 10px; font-size: 12px; text-align: center; }
+.pp-foot { padding: 7px 12px; border-top: 1px solid var(--border); font-size: 10.5px; font-family: var(--mono); }
+.seg button:disabled { opacity: .45; cursor: default; }

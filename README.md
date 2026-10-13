@@ -94,9 +94,12 @@ KWallet…), and logs in `~/.local/state/maestro/logs/`.
 
 ## Views
 
+The ticket tree on the left is resizable: drag its right edge (200–720 px), double-click the
+edge to reset. The width is remembered.
+
 | | |
 |---|---|
-| **My work** | Everything assigned to you, grouped by status, with sub-task progress, blockers and dev flow. Switch to any teammate or *Everyone* to browse tickets that aren't yours. |
+| **My work** | Everything assigned to you, grouped by status, with sub-task progress, blockers and dev flow. Switch to *Everyone* or to a teammate to browse tickets that aren't yours. The bar shows only you and the people you pin; **Find person** (`w`) searches the whole org: Enter views someone, the pin (or Ctrl+Enter) keeps them in the bar. `]` / `[` cycle the bar. The **All / current sprint** switch (`s`) keeps only tickets in an active sprint, on any of your boards (with several teams, several sprints are active at once); the choice is remembered. |
 | **Focus** | The ticket you're on: Ticket ⇄ Code bridge (Jira statuses above, dev stages below, automation links between them), code/PR panel, sub-tasks, linked issues, timeline, up-next queue. |
 | **Terminal dock** | Real shell (PTY) per ticket. `$MAESTRO_TICKET`, `$MAESTRO_BRANCH`, `$MAESTRO_SUMMARY` are set; one-click ticket commands; `git checkout -b`, `git push`, `gh pr create`, `gh pr merge` typed here advance the flow and the Jira status. |
 | **Board** | Sprint board; drag a card to transition it. |

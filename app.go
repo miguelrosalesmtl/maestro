@@ -143,13 +143,29 @@ func (a *App) Snapshot() Snapshot {
 		flows = append(flows, fl.Flow(is.Key))
 	}
 	m := tr.Meta()
+	// Lists and maps are never null in JSON: a live site can leave any of
+	// them empty (no activity yet, a 403 on statuses…), and the UI indexes them.
 	return Snapshot{
-		Me: tr.CurrentUser(), Issues: issues, Rules: fl.Rules(), Activity: fl.Activity(50), Flows: flows, Users: tr.Users(),
-		Statuses: m.Statuses, StatusStates: m.StatusStates, Sprint: m.Sprint, ChildTypes: m.ChildTypes,
-		LinkTypes: m.LinkTypes, Projects: m.Projects, Live: m.Live,
-		Sprints: m.Sprints, Versions: m.Versions, CreateDefaults: m.CreateDefaults, TimeTracking: m.TimeTracking,
-		CustomColumns: m.CustomColumns,
+		Me: tr.CurrentUser(), Issues: orEmpty(issues), Rules: orEmpty(fl.Rules()), Activity: orEmpty(fl.Activity(50)), Flows: flows, Users: orEmpty(tr.Users()),
+		Statuses: orEmpty(m.Statuses), StatusStates: orEmptyMap(m.StatusStates), Sprint: m.Sprint, ChildTypes: orEmptyMap(m.ChildTypes),
+		LinkTypes: orEmptyMap(m.LinkTypes), Projects: orEmpty(m.Projects), Live: m.Live,
+		Sprints: orEmpty(m.Sprints), Versions: orEmptyMap(m.Versions), CreateDefaults: m.CreateDefaults, TimeTracking: m.TimeTracking,
+		CustomColumns: orEmpty(m.CustomColumns),
 	}
+}
+
+func orEmpty[T any](s []T) []T {
+	if s == nil {
+		return []T{}
+	}
+	return s
+}
+
+func orEmptyMap[K comparable, V any](m map[K]V) map[K]V {
+	if m == nil {
+		return map[K]V{}
+	}
+	return m
 }
 
 // cached finds an issue in the synced set without calling Jira.

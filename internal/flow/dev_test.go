@@ -107,3 +107,15 @@ func TestLiveModeDoesNotSimulate(t *testing.T) {
 		t.Fatalf("gh pr create must not invent a PR: %+v", res.Flow)
 	}
 }
+
+// Regression (issue #1): with no events, Activity was nil and reached the UI
+// as JSON null, which crashed the first live render.
+func TestActivityEmptyIsNotNil(t *testing.T) {
+	e, _ := liveEngine(t)
+	if a := e.Activity(50); a == nil {
+		t.Fatal("Activity() = nil, want an empty slice")
+	}
+	if r := NewEngineWith(tracker.NewMock(), Options{}).Rules(); r == nil {
+		t.Fatal("Rules() = nil, want an empty slice")
+	}
+}

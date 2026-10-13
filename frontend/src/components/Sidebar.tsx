@@ -52,6 +52,45 @@ export function Rail() {
   )
 }
 
+// ── Resizable width ─────────────────────────────────────────────
+// The width lives in a CSS variable on <html>: dragging changes only that
+// variable (no React render per mouse move), and it is saved on release.
+const WIDTH_KEY = 'maestro.sidebarWidth'
+const DEFAULT_WIDTH = 296
+const clampWidth = (w: number) => Math.round(Math.min(Math.max(200, w), Math.max(320, Math.min(720, window.innerWidth * 0.5))))
+const applyWidth = (w: number) => document.documentElement.style.setProperty('--sidebar-w', `${w}px`)
+
+// Restore the saved width before the first paint.
+try {
+  const saved = Number(localStorage.getItem(WIDTH_KEY))
+  if (saved > 0) applyWidth(clampWidth(saved))
+} catch { /* per-viewer convenience only */ }
+
+function SidebarGrip() {
+  const start = (e: React.MouseEvent) => {
+    e.preventDefault()
+    const side = (e.currentTarget.parentElement as HTMLElement)
+    const x0 = e.clientX
+    const w0 = side.getBoundingClientRect().width
+    let w = w0
+    document.body.classList.add('resizing-x')
+    const move = (ev: MouseEvent) => { w = clampWidth(w0 + ev.clientX - x0); applyWidth(w) }
+    const up = () => {
+      window.removeEventListener('mousemove', move)
+      window.removeEventListener('mouseup', up)
+      document.body.classList.remove('resizing-x')
+      try { localStorage.setItem(WIDTH_KEY, String(w)) } catch { /* ignore */ }
+    }
+    window.addEventListener('mousemove', move)
+    window.addEventListener('mouseup', up)
+  }
+  const reset = () => {
+    applyWidth(DEFAULT_WIDTH)
+    try { localStorage.removeItem(WIDTH_KEY) } catch { /* ignore */ }
+  }
+  return <div className="sidebar-grip" onMouseDown={start} onDoubleClick={reset} title="Drag to resize · double-click to reset" />
+}
+
 export function Sidebar() {
   const { issues, flows, me, focusKey, setFocusKey, setView, setPaletteOpen, openCreate, openJira, childTypes } = useStore()
   const [mine, setMine] = useState(true)
@@ -126,6 +165,7 @@ export function Sidebar() {
 
   return (
     <aside className="sidebar">
+      <SidebarGrip />
       <div className="sidebar-head drag">
         <div className="workspace">
           <div className="ws-name">Acme Engineering</div>

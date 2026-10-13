@@ -52,9 +52,10 @@ export const ACTIONS: ActionDef[] = [
 
   { id: 'mine.me', label: 'Show my tickets', group: 'My work', scope: 'view:mine', keys: 'm' },
   { id: 'mine.everyone', label: 'Show everyone’s tickets', group: 'My work', scope: 'view:mine', keys: 'e' },
-  { id: 'mine.nextPerson', label: 'Next person', group: 'My work', scope: 'view:mine', keys: ']' },
-  { id: 'mine.prevPerson', label: 'Previous person', group: 'My work', scope: 'view:mine', keys: '[' },
-  { id: 'mine.sprint', label: 'Toggle current sprint only', group: 'My work', scope: 'view:mine', keys: 's' },
+  { id: 'mine.findPerson', label: 'Find a person (view or pin them)', group: 'My work', scope: 'view:mine', keys: 'w' },
+  { id: 'mine.nextPerson', label: 'Next person in the bar', group: 'My work', scope: 'view:mine', keys: ']' },
+  { id: 'mine.prevPerson', label: 'Previous person in the bar', group: 'My work', scope: 'view:mine', keys: '[' },
+  { id: 'mine.sprint', label: 'Toggle current sprint only (any active sprint)', group: 'My work', scope: 'view:mine', keys: 's' },
 
   { id: 'board.mine', label: 'Toggle only my cards', group: 'Board', scope: 'view:board', keys: 'm' },
 

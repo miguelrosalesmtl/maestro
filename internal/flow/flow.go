@@ -228,7 +228,7 @@ func (e *Engine) Flow(key string) Flow {
 func (e *Engine) Rules() []Rule {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	return append([]Rule(nil), e.rules...)
+	return append([]Rule{}, e.rules...)
 }
 
 func (e *Engine) ToggleRule(id string) []Rule {
@@ -257,7 +257,7 @@ func (e *Engine) SetRuleStatus(id, status string) []Rule {
 func (e *Engine) Activity(limit int) []Event {
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	out := append([]Event(nil), e.events...)
+	out := append([]Event{}, e.events...) // never nil: the UI gets [], not null
 	sort.SliceStable(out, func(i, j int) bool { return out[i].At > out[j].At })
 	if limit > 0 && len(out) > limit {
 		out = out[:limit]
