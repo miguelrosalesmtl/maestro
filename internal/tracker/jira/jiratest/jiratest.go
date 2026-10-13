@@ -146,6 +146,7 @@ func (f *Server) issueJSON(key string) map[string]any {
 var (
 	keyIn       = regexp.MustCompile(`key in \(([^)]*)\)`)
 	incremental = regexp.MustCompile(`updated >= -\d+m`)
+	inSprint    = regexp.MustCompile(`sprint = (\d+)`)
 )
 
 func (f *Server) serve(w http.ResponseWriter, r *http.Request) {
@@ -236,7 +237,32 @@ func (f *Server) serve(w http.ResponseWriter, r *http.Request) {
 	case p == "GET /rest/api/3/project/PLAT/components":
 		reply([]any{})
 	case p == "GET /rest/agile/1.0/board":
-		paged([]any{map[string]any{"id": 7, "name": "PLAT board", "type": "scrum"}})
+		plat := map[string]any{"id": 7, "name": "PLAT board", "type": "scrum", "location": map[string]any{"projectKey": "PLAT"}}
+		mobile := map[string]any{"id": 12, "name": "Mobile kanban", "type": "kanban", "location": map[string]any{"projectKey": "MOB"}}
+		switch name := strings.ToLower(r.URL.Query().Get("name")); {
+		case r.URL.Query().Get("projectKeyOrId") != "":
+			paged([]any{plat}) // the configured project's board (discovery)
+		case name == "":
+			paged([]any{plat, mobile})
+		case strings.Contains("plat board", name):
+			paged([]any{plat})
+		case strings.Contains("mobile kanban", name):
+			paged([]any{mobile})
+		default:
+			paged([]any{})
+		}
+	case p == "GET /rest/agile/1.0/board/7":
+		reply(map[string]any{"id": 7, "name": "PLAT board", "type": "scrum", "location": map[string]any{"projectKey": "PLAT"}})
+	case p == "GET /rest/agile/1.0/board/12":
+		reply(map[string]any{"id": 12, "name": "Mobile kanban", "type": "kanban", "location": map[string]any{"projectKey": "MOB"}})
+	case p == "GET /rest/agile/1.0/board/12/configuration":
+		reply(map[string]any{"columnConfig": map[string]any{"columns": []any{
+			map[string]any{"name": "Backlog", "statuses": []any{map[string]any{"id": "1"}}},
+			map[string]any{"name": "Doing", "statuses": []any{map[string]any{"id": "3"}, map[string]any{"id": "4"}}},
+		}}})
+	case p == "GET /rest/agile/1.0/board/12/sprint":
+		w.WriteHeader(400)
+		reply(map[string]any{"errorMessages": []string{"The board does not support sprints"}})
 	case p == "GET /rest/agile/1.0/board/7/configuration":
 		reply(map[string]any{"columnConfig": map[string]any{"columns": []any{
 			map[string]any{"name": "To Do", "statuses": []any{map[string]any{"id": "1"}}},
@@ -244,11 +270,20 @@ func (f *Server) serve(w http.ResponseWriter, r *http.Request) {
 			map[string]any{"name": "Done", "statuses": []any{map[string]any{"id": "5"}}},
 		}}})
 	case p == "GET /rest/agile/1.0/board/7/sprint":
-		paged([]any{
-			map[string]any{"id": 43, "name": "Sprint 43", "state": "future"},
-			map[string]any{"id": 42, "name": "Sprint 42", "state": "active", "goal": "Ship it", "startDate": "2026-10-06T09:00:00.000Z", "endDate": "2026-10-20T17:00:00.000Z"},
-			map[string]any{"id": 44, "name": "Hotfix sprint", "state": "active", "startDate": "2026-10-10T09:00:00.000Z"},
-		})
+		all := []map[string]any{
+			{"id": 41, "name": "Sprint 41", "state": "closed", "startDate": "2026-09-22T09:00:00.000Z", "endDate": "2026-10-06T17:00:00.000Z", "completeDate": "2026-10-06T16:00:00.000Z"},
+			{"id": 43, "name": "Sprint 43", "state": "future"},
+			{"id": 42, "name": "Sprint 42", "state": "active", "goal": "Ship it", "startDate": "2026-10-06T09:00:00.000Z", "endDate": "2026-10-20T17:00:00.000Z"},
+			{"id": 44, "name": "Hotfix sprint", "state": "active", "startDate": "2026-10-10T09:00:00.000Z"},
+		}
+		var out []any
+		states := r.URL.Query().Get("state")
+		for _, sp := range all {
+			if states == "" || strings.Contains(states, sp["state"].(string)) {
+				out = append(out, sp)
+			}
+		}
+		paged(out)
 
 	case p == "POST /rest/api/3/search/jql":
 		var body struct{ JQL string }
@@ -259,6 +294,17 @@ func (f *Server) serve(w http.ResponseWriter, r *http.Request) {
 			for _, k := range strings.Split(keyIn.FindStringSubmatch(body.JQL)[1], ",") {
 				if _, ok := f.issues[k]; ok {
 					out = append(out, f.issueJSON(k))
+				}
+			}
+		case inSprint.MatchString(body.JQL):
+			id := inSprint.FindStringSubmatch(body.JQL)[1]
+			for k, fields := range f.issues {
+				sprints, _ := fields["customfield_10020"].([]any)
+				for _, sp := range sprints {
+					if fmt.Sprint(sp.(map[string]any)["id"]) == id {
+						out = append(out, f.issueJSON(k))
+						break
+					}
 				}
 			}
 		case incremental.MatchString(body.JQL):

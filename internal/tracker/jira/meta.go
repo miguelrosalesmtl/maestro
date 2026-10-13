@@ -270,3 +270,29 @@ func arrayAsSeq[T any](ctx context.Context, c *Client, path string, q url.Values
 		}
 	}
 }
+
+// SearchBoards finds boards whose name contains name (all boards when empty),
+// at most max of them.
+func (c *Client) SearchBoards(ctx context.Context, name string, max int) ([]Board, error) {
+	q := url.Values{}
+	if name != "" {
+		q.Set("name", name)
+	}
+	var out []Board
+	for b, err := range pagesByOffset[Board](ctx, c, agile("/board"), q, 50) {
+		if err != nil {
+			return out, err
+		}
+		out = append(out, b)
+		if len(out) >= max {
+			break
+		}
+	}
+	return out, nil
+}
+
+// Board reads one board.
+func (c *Client) Board(ctx context.Context, id int) (*Board, error) {
+	var b Board
+	return &b, c.get(ctx, agile("/board/"+strconv.Itoa(id)), nil, &b)
+}

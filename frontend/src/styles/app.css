@@ -975,3 +975,19 @@ dd:hover .edit-pen, .editable:focus-within .edit-pen { opacity: 1; }
 .pp-empty { padding: 10px; font-size: 12px; text-align: center; }
 .pp-foot { padding: 7px 12px; border-top: 1px solid var(--border); font-size: 10.5px; font-family: var(--mono); }
 .seg button:disabled { opacity: .45; cursor: default; }
+
+/* Boards bar: Your sprint, pinned boards, Find board */
+.boards-bar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.boards-bar .person:has(svg:first-child) { padding-left: 10px; }
+.board-sprint { color: var(--text-3); font-weight: 600; }
+.sprint-select { min-width: 180px; }
+.board-type { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-3); padding: 1px 6px; border: 1px solid var(--border); border-radius: 6px; }
+.board-picker { width: 380px; }
+.board-error { margin: 0 0 12px; padding: 10px 12px; border-radius: 10px; color: var(--red); background: rgba(255, 92, 122, .08); border: 1px solid rgba(255, 92, 122, .3); font-size: 12.5px; }
+.board-loading { display: flex; align-items: center; gap: 8px; padding: 40px; justify-content: center; color: var(--text-3); }
+
+.filter { display: flex; align-items: center; gap: 8px; }
+.filter input { flex: 1; min-width: 0; }
+.sprint-filter { max-width: 48%; background: transparent; color: var(--text-3); border: 0; border-bottom: 1px solid var(--border); padding: 6px 2px; font-size: 12px; outline: none; cursor: pointer; }
+.sprint-filter.on { color: var(--accent-2); border-color: var(--accent-2); }
+.sprint-filter option, .sprint-filter optgroup { background: #16161f; color: var(--text); }

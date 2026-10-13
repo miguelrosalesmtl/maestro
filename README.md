@@ -95,14 +95,16 @@ KWallet…), and logs in `~/.local/state/maestro/logs/`.
 ## Views
 
 The ticket tree on the left is resizable: drag its right edge (200–720 px), double-click the
-edge to reset. The width is remembered.
+edge to reset. Next to its filter, a sprint selector shows one sprint at a time: *Current*
+(any active sprint), a specific sprint, or *Backlog*; epics and initiatives stay as context.
+Both are remembered.
 
 | | |
 |---|---|
 | **My work** | Everything assigned to you, grouped by status, with sub-task progress, blockers and dev flow. Switch to *Everyone* or to a teammate to browse tickets that aren't yours. The bar shows only you and the people you pin; **Find person** (`w`) searches the whole org: Enter views someone, the pin (or Ctrl+Enter) keeps them in the bar. `]` / `[` cycle the bar. The **All / current sprint** switch (`s`) keeps only tickets in an active sprint, on any of your boards (with several teams, several sprints are active at once); the choice is remembered. |
 | **Focus** | The ticket you're on: Ticket ⇄ Code bridge (Jira statuses above, dev stages below, automation links between them), code/PR panel, sub-tasks, linked issues, timeline, up-next queue. |
 | **Terminal dock** | Real shell (PTY) per ticket. `$MAESTRO_TICKET`, `$MAESTRO_BRANCH`, `$MAESTRO_SUMMARY` are set; one-click ticket commands; `git checkout -b`, `git push`, `gh pr create`, `gh pr merge` typed here advance the flow and the Jira status. |
-| **Board** | Sprint board; drag a card to transition it. |
+| **Board** | *Your sprint* (the active sprint of your projects), or any Jira board: **Find board** (`w`) searches every board on the site; pin the ones you follow. A board shows its own Jira columns and any sprint you pick (active, upcoming, recently closed); kanban boards show open work. Drag a card to transition it; `r` reloads, `]` / `[` switch boards. Pins and the last sprint per board are remembered. |
 | **Roadmap** | Initiative → Epic → tickets with rolled-up progress. |
 | **Automations** | Rules: *when* dev event *then* move ticket to status. |
 | **Freestyle** | Terminals not linked to a ticket, for investigations. They start in your home folder, get no ticket variables, and never move a ticket. Double-click a tab to rename it; tabs are remembered. |

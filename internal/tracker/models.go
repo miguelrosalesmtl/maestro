@@ -273,6 +273,40 @@ type Meta struct {
 
 // Tracker is what the UI talks to: the in-memory Mock or the live Jira adapter
 // (internal/tracker/live).
+// BoardInfo is a Jira agile board.
+type BoardInfo struct {
+	ID      int    `json:"id"`
+	Name    string `json:"name"`
+	Type    string `json:"type"` // scrum | kanban | simple
+	Project string `json:"project,omitempty"`
+}
+
+// BoardColumn is one column of a board as configured in Jira.
+type BoardColumn struct {
+	Name     string   `json:"name"`
+	Keys     []string `json:"keys"`     // issues in this column, in board order
+	Statuses []string `json:"statuses"` // status names of the column (drop target)
+}
+
+// BoardView is a board showing one sprint (or, without sprints, its open work).
+type BoardView struct {
+	Board     BoardInfo     `json:"board"`
+	Sprint    *SprintInfo   `json:"sprint"`
+	Columns   []BoardColumn `json:"columns"`
+	Issues    []Issue       `json:"issues"`
+	Truncated bool          `json:"truncated"` // more issues than shown
+}
+
+// BoardBrowser is implemented by trackers that can show any board
+// (not only the boards of the configured projects).
+type BoardBrowser interface {
+	SearchBoards(query string) ([]BoardInfo, error)
+	// BoardSprints: active, then future, then the most recent closed ones.
+	BoardSprints(boardID int) ([]SprintInfo, error)
+	// BoardIssues shows one sprint; sprintID 0 = the board's open work.
+	BoardIssues(boardID, sprintID int) (BoardView, error)
+}
+
 // PRLink is a pull request to show as a web link on an issue.
 type PRLink struct {
 	URL    string

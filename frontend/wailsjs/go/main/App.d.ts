@@ -14,6 +14,10 @@ export function CreateIssue(arg1:tracker.NewIssue):Promise<tracker.Issue>;
 
 export function GetActivity():Promise<Array<flow.Event>>;
 
+export function GetBoard(arg1:number,arg2:number):Promise<tracker.BoardView>;
+
+export function GetBoardSprints(arg1:number):Promise<Array<tracker.SprintInfo>>;
+
 export function GetConnection():Promise<main.Connection>;
 
 export function GetCreateFieldSpecs(arg1:string,arg2:tracker.IssueType):Promise<Array<tracker.FieldSpec>>;
@@ -43,6 +47,8 @@ export function OpenURL(arg1:string):Promise<void>;
 export function ResetFlow(arg1:string):Promise<flow.StepResult>;
 
 export function SaveKeybindings(arg1:config.Keybindings):Promise<main.KeybindingsInfo>;
+
+export function SearchBoards(arg1:string):Promise<Array<tracker.BoardInfo>>;
 
 export function SetRuleStatus(arg1:string,arg2:string):Promise<Array<flow.Rule>>;
 

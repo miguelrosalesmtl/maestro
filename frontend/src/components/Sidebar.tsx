@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { ChevronRight, Columns3, Crosshair, Flag, GitPullRequest, SquareDashedBottomCode, Inbox, Keyboard, Layers, Lock, Plus, Search, Zap } from 'lucide-react'
 import { combosOf, compactCombo, formatCombo, useKeys } from '../keys'
 import { useStore } from '../store'
@@ -91,8 +91,16 @@ function SidebarGrip() {
   return <div className="sidebar-grip" onMouseDown={start} onDoubleClick={reset} title="Drag to resize · double-click to reset" />
 }
 
+const SPRINT_SEL_KEY = 'maestro.treeSprint'
+function loadSprintSel(): string {
+  try { return localStorage.getItem(SPRINT_SEL_KEY) || 'all' } catch { return 'all' }
+}
+function saveSprintSel(v: string) {
+  try { localStorage.setItem(SPRINT_SEL_KEY, v) } catch { /* per-viewer convenience only */ }
+}
+
 export function Sidebar() {
-  const { issues, flows, me, focusKey, setFocusKey, setView, setPaletteOpen, openCreate, openJira, childTypes } = useStore()
+  const { issues, flows, me, focusKey, setFocusKey, setView, setPaletteOpen, openCreate, openJira, childTypes, sprints } = useStore()
   const [mine, setMine] = useState(true)
   const conn = useConnection()
   const gh = useGitHub()
@@ -110,14 +118,52 @@ export function Sidebar() {
   }, [issues])
   const query = q.trim().toLowerCase()
 
-  const visible = (i: Issue): boolean => {
-    const kids = i.childKeys.map(k => issues[k]).filter(Boolean)
-    if (kids.some(visible)) return true
-    if (isContainer(i)) return !mine && !query && !kids.length // show empty initiatives/epics in "Everything"
-    const okMine = !mine || i.assignee?.id === me?.id
-    const okQ = !query || i.key.toLowerCase().includes(query) || i.summary.toLowerCase().includes(query)
-    return okMine && okQ
-  }
+  // Sprint filter: all | current (any active sprint) | backlog | s:<name>.
+  const [sprintSel, setSprintSelState] = useState(loadSprintSel)
+  const setSprintSel = (v: string) => { setSprintSelState(v); saveSprintSel(v) }
+  const active = useMemo(() => new Set(sprints.filter(s => s.state === 'active').map(s => s.name)), [sprints])
+  const sprintNames = useMemo(() => {
+    // Sprints known from the boards, plus any sprint named on a ticket.
+    const names = new Map(sprints.map(s => [s.name, s.state as string]))
+    for (const i of Object.values(issues)) if (i.sprint && !names.has(i.sprint)) names.set(i.sprint, '')
+    return [...names].sort((a, b) => (a[1] === 'active' ? 0 : 1) - (b[1] === 'active' ? 0 : 1) || a[0].localeCompare(b[0], undefined, { numeric: true }))
+  }, [sprints, issues])
+  const sprintOk = useCallback((i: Issue) => {
+    if (sprintSel === 'all') return true
+    // A sub-task is in its parent's sprint.
+    const sp = i.sprint || (i.type === 'subtask' ? issues[i.parentKey]?.sprint ?? '' : '')
+    if (sprintSel === 'current') return active.has(sp)
+    if (sprintSel === 'backlog') return !sp
+    return sp === sprintSel.slice(2)
+  }, [sprintSel, active, issues])
+
+  // Which tickets show, computed once per change (not per row per render):
+  // a ticket shows if it matches, or if something under it does.
+  const shown = useMemo(() => {
+    const out = new Set<string>()
+    const filtered = mine || !!query || sprintSel !== 'all'
+    const walk = (i: Issue, seen: Set<string>): boolean => {
+      if (seen.has(i.key)) return false // guards against a cycle in bad data
+      seen.add(i.key)
+      let any = false
+      for (const k of i.childKeys) {
+        const kid = issues[k]
+        if (kid && walk(kid, seen)) any = true
+      }
+      let ok = any
+      if (!any) {
+        if (isContainer(i)) ok = !filtered && !i.childKeys.some(k => issues[k]) // empty initiatives/epics in "Everything"
+        else ok = (!mine || i.assignee?.id === me?.id)
+          && (!query || i.key.toLowerCase().includes(query) || i.summary.toLowerCase().includes(query))
+          && sprintOk(i)
+      }
+      if (ok) out.add(i.key)
+      return ok
+    }
+    for (const r of roots) walk(r, new Set())
+    return out
+  }, [issues, roots, mine, query, me?.id, sprintSel, sprintOk])
+  const visible = (i: Issue) => shown.has(i.key)
 
   const select = (k: string) => { setFocusKey(k); setView('focus') }
 
@@ -195,6 +241,16 @@ export function Sidebar() {
 
       <div className="filter">
         <input data-search value={q} onChange={e => setQ(e.target.value)} placeholder="Filter…  /" />
+        <select className={cx('sprint-filter', sprintSel !== 'all' && 'on')} value={sprintSel} onChange={e => setSprintSel(e.target.value)} title="Show tickets of one sprint">
+          <option value="all">All sprints</option>
+          <option value="current" disabled={!active.size}>{active.size === 1 ? `Current · ${[...active][0]}` : active.size ? 'Current sprints' : 'Current (none active)'}</option>
+          {sprintNames.length > 0 && (
+            <optgroup label="Sprint">
+              {sprintNames.map(([n, state]) => <option key={n} value={`s:${n}`}>{n}{state === 'future' ? ' (upcoming)' : ''}</option>)}
+            </optgroup>
+          )}
+          <option value="backlog">Backlog (no sprint)</option>
+        </select>
       </div>
 
       <div className="tree scroll">

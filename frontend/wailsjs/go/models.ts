@@ -427,138 +427,38 @@ export namespace tracker {
 	        this.created = source["created"];
 	    }
 	}
-	export class User {
-	    id: string;
+	export class BoardColumn {
 	    name: string;
-	    initials: string;
-	    color: string;
+	    keys: string[];
+	    statuses: string[];
 	
 	    static createFrom(source: any = {}) {
-	        return new User(source);
+	        return new BoardColumn(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.keys = source["keys"];
+	        this.statuses = source["statuses"];
+	    }
+	}
+	export class BoardInfo {
+	    id: number;
+	    name: string;
+	    type: string;
+	    project?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new BoardInfo(source);
 	    }
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.name = source["name"];
-	        this.initials = source["initials"];
-	        this.color = source["color"];
-	    }
-	}
-	export class Comment {
-	    id: string;
-	    author: User;
-	    body: string;
-	    created: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new Comment(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.author = this.convertValues(source["author"], User);
-	        this.body = source["body"];
-	        this.created = source["created"];
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-	export class CreateDefaults {
-	    sprint: string;
-	    fixVersion: string;
-	    affectsVersion: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new CreateDefaults(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.sprint = source["sprint"];
-	        this.fixVersion = source["fixVersion"];
-	        this.affectsVersion = source["affectsVersion"];
-	    }
-	}
-	export class CustomColumn {
-	    id: string;
-	    label: string;
-	    role?: string;
-	    show: string[];
-	
-	    static createFrom(source: any = {}) {
-	        return new CustomColumn(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.label = source["label"];
-	        this.role = source["role"];
-	        this.show = source["show"];
-	    }
-	}
-	export class FieldPatch {
-	    fixVersions?: string[];
-	    affectsVersions?: string[];
-	    dueDate?: string;
-	    labels?: string[];
-	    custom?: Record<string, Array<string>>;
-	
-	    static createFrom(source: any = {}) {
-	        return new FieldPatch(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.fixVersions = source["fixVersions"];
-	        this.affectsVersions = source["affectsVersions"];
-	        this.dueDate = source["dueDate"];
-	        this.labels = source["labels"];
-	        this.custom = source["custom"];
-	    }
-	}
-	export class FieldSpec {
-	    id: string;
-	    label: string;
-	    kind: string;
-	    required: boolean;
-	    options?: string[];
-	    role?: string;
-	    default?: string;
-	    requiredBy?: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new FieldSpec(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.label = source["label"];
-	        this.kind = source["kind"];
-	        this.required = source["required"];
-	        this.options = source["options"];
-	        this.role = source["role"];
-	        this.default = source["default"];
-	        this.requiredBy = source["requiredBy"];
+	        this.type = source["type"];
+	        this.project = source["project"];
 	    }
 	}
 	export class FieldValue {
@@ -603,6 +503,42 @@ export namespace tracker {
 	        this.spent = source["spent"];
 	    }
 	}
+	export class Comment {
+	    id: string;
+	    author: User;
+	    body: string;
+	    created: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Comment(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.author = this.convertValues(source["author"], User);
+	        this.body = source["body"];
+	        this.created = source["created"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class Link {
 	    type: string;
 	    key: string;
@@ -615,6 +551,24 @@ export namespace tracker {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.type = source["type"];
 	        this.key = source["key"];
+	    }
+	}
+	export class User {
+	    id: string;
+	    name: string;
+	    initials: string;
+	    color: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new User(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.initials = source["initials"];
+	        this.color = source["color"];
 	    }
 	}
 	export class Issue {
@@ -723,6 +677,151 @@ export namespace tracker {
 		    return a;
 		}
 	}
+	export class SprintInfo {
+	    id: number;
+	    name: string;
+	    state: string;
+	    goal?: string;
+	    start?: string;
+	    end?: string;
+	    project: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SprintInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.state = source["state"];
+	        this.goal = source["goal"];
+	        this.start = source["start"];
+	        this.end = source["end"];
+	        this.project = source["project"];
+	    }
+	}
+	export class BoardView {
+	    board: BoardInfo;
+	    sprint?: SprintInfo;
+	    columns: BoardColumn[];
+	    issues: Issue[];
+	    truncated: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new BoardView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.board = this.convertValues(source["board"], BoardInfo);
+	        this.sprint = this.convertValues(source["sprint"], SprintInfo);
+	        this.columns = this.convertValues(source["columns"], BoardColumn);
+	        this.issues = this.convertValues(source["issues"], Issue);
+	        this.truncated = source["truncated"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	export class CreateDefaults {
+	    sprint: string;
+	    fixVersion: string;
+	    affectsVersion: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CreateDefaults(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sprint = source["sprint"];
+	        this.fixVersion = source["fixVersion"];
+	        this.affectsVersion = source["affectsVersion"];
+	    }
+	}
+	export class CustomColumn {
+	    id: string;
+	    label: string;
+	    role?: string;
+	    show: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new CustomColumn(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.label = source["label"];
+	        this.role = source["role"];
+	        this.show = source["show"];
+	    }
+	}
+	export class FieldPatch {
+	    fixVersions?: string[];
+	    affectsVersions?: string[];
+	    dueDate?: string;
+	    labels?: string[];
+	    custom?: Record<string, Array<string>>;
+	
+	    static createFrom(source: any = {}) {
+	        return new FieldPatch(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.fixVersions = source["fixVersions"];
+	        this.affectsVersions = source["affectsVersions"];
+	        this.dueDate = source["dueDate"];
+	        this.labels = source["labels"];
+	        this.custom = source["custom"];
+	    }
+	}
+	export class FieldSpec {
+	    id: string;
+	    label: string;
+	    kind: string;
+	    required: boolean;
+	    options?: string[];
+	    role?: string;
+	    default?: string;
+	    requiredBy?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new FieldSpec(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.label = source["label"];
+	        this.kind = source["kind"];
+	        this.required = source["required"];
+	        this.options = source["options"];
+	        this.role = source["role"];
+	        this.default = source["default"];
+	        this.requiredBy = source["requiredBy"];
+	    }
+	}
+	
+	
 	
 	export class NewIssue {
 	    type: string;
@@ -760,30 +859,7 @@ export namespace tracker {
 	        this.custom = source["custom"];
 	    }
 	}
-	export class SprintInfo {
-	    id: number;
-	    name: string;
-	    state: string;
-	    goal?: string;
-	    start?: string;
-	    end?: string;
-	    project: string;
 	
-	    static createFrom(source: any = {}) {
-	        return new SprintInfo(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.name = source["name"];
-	        this.state = source["state"];
-	        this.goal = source["goal"];
-	        this.start = source["start"];
-	        this.end = source["end"];
-	        this.project = source["project"];
-	    }
-	}
 	
 	export class Transition {
 	    id: string;

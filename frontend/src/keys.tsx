@@ -58,6 +58,10 @@ export const ACTIONS: ActionDef[] = [
   { id: 'mine.sprint', label: 'Toggle current sprint only (any active sprint)', group: 'My work', scope: 'view:mine', keys: 's' },
 
   { id: 'board.mine', label: 'Toggle only my cards', group: 'Board', scope: 'view:board', keys: 'm' },
+  { id: 'board.find', label: 'Find a Jira board (view or pin it)', group: 'Board', scope: 'view:board', keys: 'w' },
+  { id: 'board.next', label: 'Next board in the bar', group: 'Board', scope: 'view:board', keys: ']' },
+  { id: 'board.prev', label: 'Previous board in the bar', group: 'Board', scope: 'view:board', keys: '[' },
+  { id: 'board.refresh', label: 'Reload the board from Jira', group: 'Board', scope: 'view:board', keys: 'r' },
 
   { id: 'jira.close', label: 'Close Jira view', group: 'Jira view', scope: 'jira', keys: 'escape' },
   { id: 'jira.comment', label: 'Add comment', group: 'Jira view', scope: 'jira', keys: 'm' },

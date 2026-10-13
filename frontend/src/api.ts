@@ -1,6 +1,6 @@
 // Thin typed wrapper over the generated Wails bindings.
 import * as App from '../wailsjs/go/main/App'
-import type { Connection, GitHubStatus, FieldPatch, FieldSpec, Flow, Issue, IssueType, NewIssue, Rule, Snapshot, StepResult, Transition, FlowEvent } from './types'
+import type { BoardInfo, JiraBoard, SprintInfo, Connection, GitHubStatus, FieldPatch, FieldSpec, Flow, Issue, IssueType, NewIssue, Rule, Snapshot, StepResult, Transition, FlowEvent } from './types'
 
 // Every backend call goes through call(): if a binding is missing (backend older
 // than the UI, bridge not ready) it throws synchronously, which would escape
@@ -31,6 +31,9 @@ export const api = {
   logInfo: () => call<{ dir: string; file: string; previousCrash: string }>(() => App.GetLogInfo()),
   openLogFolder: () => call<void>(() => App.OpenLogFolder()),
   connection: () => call<Connection>(() => App.GetConnection()),
+  searchBoards: (q: string) => call<BoardInfo[]>(() => App.SearchBoards(q)),
+  boardSprints: (boardId: number) => call<SprintInfo[]>(() => App.GetBoardSprints(boardId)),
+  board: (boardId: number, sprintId: number) => call<JiraBoard>(() => App.GetBoard(boardId, sprintId)),
   githubStatus: () => call<GitHubStatus>(() => App.GetGitHubStatus()),
   termOpen: (key: string, cols: number, rows: number) => call<boolean>(() => App.TermOpen(key, cols, rows)),
   termWrite: (key: string, data: string) => call<void>(() => App.TermWrite(key, data)),

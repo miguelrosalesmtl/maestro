@@ -18,6 +18,14 @@ export function GetActivity() {
   return window['go']['main']['App']['GetActivity']();
 }
 
+export function GetBoard(arg1, arg2) {
+  return window['go']['main']['App']['GetBoard'](arg1, arg2);
+}
+
+export function GetBoardSprints(arg1) {
+  return window['go']['main']['App']['GetBoardSprints'](arg1);
+}
+
 export function GetConnection() {
   return window['go']['main']['App']['GetConnection']();
 }
@@ -76,6 +84,10 @@ export function ResetFlow(arg1) {
 
 export function SaveKeybindings(arg1) {
   return window['go']['main']['App']['SaveKeybindings'](arg1);
+}
+
+export function SearchBoards(arg1) {
+  return window['go']['main']['App']['SearchBoards'](arg1);
 }
 
 export function SetRuleStatus(arg1, arg2) {

@@ -55,7 +55,13 @@ export interface FieldPatch {
   custom?: Record<string, string[]>
 }
 
-export interface SprintInfo { id: number; name: string; state: 'active' | 'future'; goal?: string; start?: string; end?: string; project: string }
+export interface SprintInfo { id: number; name: string; state: 'active' | 'future' | 'closed'; goal?: string; start?: string; end?: string; project: string }
+
+/** A Jira agile board (Board view → Find board). */
+export interface BoardInfo { id: number; name: string; type: 'scrum' | 'kanban' | 'simple' | string; project?: string }
+export interface JiraBoardColumn { name: string; keys: string[]; statuses: string[] }
+/** One board showing one sprint (or a kanban board's open work). */
+export interface JiraBoard { board: BoardInfo; sprint: SprintInfo | null; columns: JiraBoardColumn[]; issues: Issue[]; truncated: boolean }
 export interface VersionInfo { id: string; name: string; released: boolean; releaseDate?: string; overdue?: boolean }
 export interface CustomColumn { id: string; label: string; role?: string; show: string[] }
 export interface CreateDefaults { sprint: string; fixVersion: string; affectsVersion: string }
