@@ -59,13 +59,14 @@ func TestFreestyleSessionHasNoTicket(t *testing.T) {
 	if _, err := m.Open(Context{Session: "free:1", Dir: t.TempDir()}, 80, 24); err != nil {
 		t.Fatal(err)
 	}
-	if err := m.Write("free:1", "echo ticket=[${MAESTRO_TICKET-unset}]\r"); err != nil {
+	// The quotes split the marker, so the echoed command line cannot match it.
+	if err := m.Write("free:1", "echo ticket\"\"=[${MAESTRO_TICKET-unset}]\r"); err != nil {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(3 * time.Second)
 	for time.Now().Before(deadline) {
 		mu.Lock()
-		done := strings.Contains(out.String(), "ticket=[")
+		done := strings.Contains(out.String(), "ticket=[") // output only
 		mu.Unlock()
 		if done {
 			break
