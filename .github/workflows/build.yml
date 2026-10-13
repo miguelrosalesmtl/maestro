@@ -54,6 +54,9 @@ jobs:
       - run: wails build -tags webkit2_41 -clean
       - name: App tests (end-to-end against a fake Jira)
         run: go test -tags webkit2_41 -count=1 .
+      - name: Frontend tests
+        run: npm test
+        working-directory: frontend
       - run: tar -czf Maestro-linux-amd64.tar.gz -C build/bin maestro
       - uses: actions/upload-artifact@v6
         with:

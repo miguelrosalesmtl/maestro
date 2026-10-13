@@ -82,7 +82,10 @@ func NewTLS(t testing.TB) *Server { return start(t, true) }
 
 func start(t testing.TB, useTLS bool) *Server {
 	f := &Server{t: t, issues: map[string]map[string]any{}, recent: map[string]bool{}, nextID: 100}
-	f.put("OPS-1", "Out-of-scope epic", "epic", "In Progress", "", nil) // parent outside scope
+	f.put("OPS-1", "Out-of-scope epic", "epic", "In Progress", "", map[string]any{ // parent outside scope
+		"assignee": map[string]any{"accountId": "ana", "displayName": "Ana Torres", "active": true}})
+	// Another team's project, but assigned to me: in scope through "assignee = currentUser()".
+	f.put("MOB-7", "Fix login on tablets", "story", "In Progress", "", nil)
 	f.put("PLAT-1", "Epic", "epic", "In Progress", "OPS-1", nil)
 	f.put("PLAT-2", "Story", "story", "To Do", "PLAT-1", map[string]any{"customfield_10016": 5,
 		// carried over from Sprint 41
@@ -312,8 +315,10 @@ func (f *Server) serve(w http.ResponseWriter, r *http.Request) {
 				out = append(out, f.issueJSON(k))
 			}
 		default:
-			for k := range f.issues {
-				if strings.HasPrefix(k, "PLAT-") {
+			mine := strings.Contains(body.JQL, "assignee = currentUser()")
+			for k, fields := range f.issues {
+				a, _ := fields["assignee"].(map[string]any)
+				if strings.HasPrefix(k, "PLAT-") || (mine && a != nil && a["accountId"] == "me") {
 					out = append(out, f.issueJSON(k))
 				}
 			}
@@ -448,6 +453,13 @@ func (f *Server) SetStatus(key, status string) {
 	f.issues[key]["status"] = Statuses[status]
 	f.touch(key)
 	f.recent[key] = true
+}
+
+// Add creates an issue as if someone made it in Jira (assigned to me).
+func (f *Server) Add(key, summary, status string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.put(key, summary, "story", status, "", nil)
 }
 
 // MarkRecent makes the next incremental search return key (unchanged).

@@ -991,3 +991,6 @@ dd:hover .edit-pen, .editable:focus-within .edit-pen { opacity: 1; }
 .sprint-filter { max-width: 48%; background: transparent; color: var(--text-3); border: 0; border-bottom: 1px solid var(--border); padding: 6px 2px; font-size: 12px; outline: none; cursor: pointer; }
 .sprint-filter.on { color: var(--accent-2); border-color: var(--accent-2); }
 .sprint-filter option, .sprint-filter optgroup { background: #16161f; color: var(--text); }
+.refresh-btn { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-left: 2px; border-radius: 5px; color: var(--text-3); }
+.refresh-btn:hover { color: var(--text); background: var(--surface-2); }
+.refresh-btn.busy svg { animation: spin 1s linear infinite; }

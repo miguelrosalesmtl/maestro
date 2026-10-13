@@ -207,3 +207,35 @@ func hasLink(is tracker.Issue, typ, key string) bool {
 	}
 	return false
 }
+
+// A ticket created in Jira shows after Refresh, without waiting for polling;
+// one in another team's project counts when it is assigned to me.
+func TestRefreshPicksUpNewTickets(t *testing.T) {
+	f := jiratest.New(t)
+	tr := newTracker(t, f, nil)
+	has := func(key string) bool {
+		for _, is := range tr.ListIssues() {
+			if is.Key == key {
+				return true
+			}
+		}
+		return false
+	}
+	if !has("MOB-7") {
+		t.Fatal("an issue assigned to me in another project must be synced")
+	}
+	if has("OPS-1") && !tr.issues["OPS-1"].ancestor {
+		t.Fatal("OPS-1 is assigned to someone else: only kept as a parent")
+	}
+
+	f.Add("PLAT-50", "Created in Jira just now", "To Do")
+	if has("PLAT-50") {
+		t.Fatal("precondition: not synced yet")
+	}
+	if err := tr.Refresh(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !has("PLAT-50") {
+		t.Fatal("Refresh must pick up a ticket created in Jira")
+	}
+}

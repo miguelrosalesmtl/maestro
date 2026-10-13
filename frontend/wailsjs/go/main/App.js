@@ -78,6 +78,10 @@ export function OpenURL(arg1) {
   return window['go']['main']['App']['OpenURL'](arg1);
 }
 
+export function RefreshJira() {
+  return window['go']['main']['App']['RefreshJira']();
+}
+
 export function ResetFlow(arg1) {
   return window['go']['main']['App']['ResetFlow'](arg1);
 }

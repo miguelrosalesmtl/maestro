@@ -44,6 +44,8 @@ export function OpenLogFolder():Promise<void>;
 
 export function OpenURL(arg1:string):Promise<void>;
 
+export function RefreshJira():Promise<void>;
+
 export function ResetFlow(arg1:string):Promise<flow.StepResult>;
 
 export function SaveKeybindings(arg1:config.Keybindings):Promise<main.KeybindingsInfo>;

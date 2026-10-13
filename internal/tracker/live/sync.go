@@ -10,10 +10,39 @@ import (
 	"maestro/internal/tracker/jira"
 )
 
-// scopeJQL is the set of issues Maestro keeps: open work in the
-// projects in scope, plus anything finished in the last two weeks.
+// scopeJQL is the set of issues Maestro keeps: open work in the projects
+// in scope and anything assigned to you in any project (My work promises
+// "wherever it lives"), plus anything finished in the last two weeks.
 func (t *Tracker) scopeJQL() string {
-	return fmt.Sprintf("project in (%s) AND (statusCategory != Done OR updated >= -14d)", quoteKeys(t.keys))
+	who := "assignee = currentUser()"
+	if len(t.keys) > 0 {
+		who = fmt.Sprintf("(project in (%s) OR %s)", quoteKeys(t.keys), who)
+	}
+	return who + " AND (statusCategory != Done OR updated >= -14d)"
+}
+
+// Refresh runs a full sync now (the Refresh button). It waits for a sync
+// already running, and restarts polling if it had stopped (e.g. after the
+// token was rejected and then renewed).
+func (t *Tracker) Refresh(ctx context.Context) error {
+	t.syncMu.Lock()
+	defer t.syncMu.Unlock()
+	t.setStatus(StateSyncing, "")
+	if err := t.fullSync(ctx); err != nil {
+		t.fail(err)
+		return err
+	}
+	if t.done != nil {
+		select {
+		case <-t.done: // the loop had ended: start it again
+			loopCtx, cancel := context.WithCancel(context.Background())
+			t.cancel, t.done = cancel, make(chan struct{})
+			go t.loop(loopCtx)
+			t.log.Info("sync restarted by refresh")
+		default:
+		}
+	}
+	return nil
 }
 
 // fullSync replaces the local set with what Jira has now. It catches deleted
@@ -187,6 +216,7 @@ func (t *Tracker) loop(ctx context.Context) {
 
 		cctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 		var err error
+		t.syncMu.Lock() // never at the same time as a Refresh
 		t.mu.RLock()
 		dueFull := t.now().Sub(t.lastFull) >= full
 		t.mu.RUnlock()
@@ -195,6 +225,7 @@ func (t *Tracker) loop(ctx context.Context) {
 		} else {
 			err = t.incrementalSync(cctx)
 		}
+		t.syncMu.Unlock()
 		cancel()
 
 		switch {

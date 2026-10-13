@@ -74,6 +74,8 @@ interface Store {
   setRuleStatus: (id: string, status: string) => Promise<void>
   copy: (text: string, label?: string) => void
   dismissToast: (id: string) => void
+  /** Shows a short notice (bottom right). */
+  pushToast: (t: Omit<Toast, 'id'>) => void
   /** Makes an issue known to the app (e.g. opened from another team's board). */
   adoptIssue: (issue: Issue) => void
   /** Re-reads one issue (with comments) from the tracker. */
@@ -305,6 +307,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (opts?.focus !== false) focusTerminalSoon(session)
       return session
     },
+    pushToast,
     adoptIssue: i => setIssues(m => (m[i.key] ? m : { ...m, [i.key]: i })),
     freeSessions, activeFree,
     selectFree: id => { setActiveFree(id); focusTerminalSoon(id) },

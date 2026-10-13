@@ -34,6 +34,7 @@ export const api = {
   searchBoards: (q: string) => call<BoardInfo[]>(() => App.SearchBoards(q)),
   boardSprints: (boardId: number) => call<SprintInfo[]>(() => App.GetBoardSprints(boardId)),
   board: (boardId: number, sprintId: number) => call<JiraBoard>(() => App.GetBoard(boardId, sprintId)),
+  refreshJira: () => call<void>(() => App.RefreshJira()),
   githubStatus: () => call<GitHubStatus>(() => App.GetGitHubStatus()),
   termOpen: (key: string, cols: number, rows: number) => call<boolean>(() => App.TermOpen(key, cols, rows)),
   termWrite: (key: string, data: string) => call<void>(() => App.TermWrite(key, data)),

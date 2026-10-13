@@ -57,10 +57,11 @@ func TestAppConnectsToJiraEndToEnd(t *testing.T) {
 	for _, is := range snap.Issues {
 		keys = append(keys, is.Key)
 	}
-	if strings.Join(keys, ",") != "OPS-1,PLAT-1,PLAT-2,PLAT-3" {
+	// MOB-7 is another team's project but assigned to me: My work shows it.
+	if strings.Join(keys, ",") != "MOB-7,OPS-1,PLAT-1,PLAT-2,PLAT-3" {
 		t.Fatalf("issues = %v", keys)
 	}
-	if len(snap.Flows) != 4 || len(snap.Activity) != 0 {
+	if len(snap.Flows) != 5 || len(snap.Activity) != 0 {
 		t.Fatalf("live mode must not contain demo flows or events: %d flows, %d events", len(snap.Flows), len(snap.Activity))
 	}
 

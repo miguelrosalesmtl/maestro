@@ -23,6 +23,7 @@ export const ACTIONS: ActionDef[] = [
   { id: 'search', label: 'Filter / search', group: 'General', scope: 'global', keys: '/' },
   { id: 'create', label: 'Create issue', group: 'General', scope: 'global', keys: 'c' },
   { id: 'jira.open', label: 'Open current ticket in Jira view', group: 'General', scope: 'global', keys: 'j' },
+  { id: 'jira.refresh', label: 'Refresh from Jira now', group: 'General', scope: 'global', keys: 'shift+r' },
   { id: 'terminal.toggle', label: 'Jump to terminal / back to the app', group: 'Terminal', scope: 'global', keys: 'ctrl+`', anywhere: true },
   { id: 'terminal.focus', label: 'Focus terminal', group: 'Terminal', scope: 'global', keys: 't' },
   { id: 'terminal.hide', label: 'Show / hide terminal panel', group: 'Terminal', scope: 'global', keys: 'mod+shift+j', anywhere: true },

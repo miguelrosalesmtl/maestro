@@ -97,6 +97,7 @@ type Tracker struct {
 
 	cmeta createMetaCache
 
+	syncMu sync.Mutex // one sync at a time (loop or Refresh)
 	cancel context.CancelFunc
 	done   chan struct{}
 	now    func() time.Time

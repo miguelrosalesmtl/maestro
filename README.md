@@ -147,8 +147,10 @@ go run ./cmd/maestro-jira discover -apply    # …and saves it
 Then restart Maestro: the sidebar shows a green **Jira · your-site** dot and your real issues.
 Without a login (or if the connection fails) it shows sample data and says why.
 
-What is live: issues in your projects (open work + anything updated in the last 14 days,
-plus their epics/initiatives), polled every 60 s (15 s right after you change something);
+What is live: issues in your projects and anything assigned to you in any project (open work +
+anything updated in the last 14 days, plus their epics/initiatives), polled every 60 s (15 s
+right after you change something). **Refresh now** with the ↻ button next to the Jira status
+in the sidebar, or `Shift+R`;
 status changes use real Jira transitions (a required Resolution is filled in); create,
 comment, link/unlink; changes made in Jira by others appear on the ticket timeline.
 "Start work" types `git checkout -b …` into the ticket's terminal (opened in the project's

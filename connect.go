@@ -203,3 +203,18 @@ func explainConnectError(err error) string {
 	}
 	return err.Error()
 }
+
+// RefreshJira runs a full sync now (sidebar refresh button, Shift+R).
+// Results arrive through the usual "tracker:changed" event.
+func (a *App) RefreshJira() error {
+	a.mu.RLock()
+	lt := a.live
+	a.mu.RUnlock()
+	if lt == nil {
+		return nil // demo data: nothing to refresh
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	a.log.Info("refresh requested")
+	return a.fail("refresh from jira", lt.Refresh(ctx))
+}

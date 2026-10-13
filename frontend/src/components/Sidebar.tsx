@@ -1,9 +1,11 @@
 import { useCallback, useMemo, useState } from 'react'
-import { ChevronRight, Columns3, Crosshair, Flag, GitPullRequest, SquareDashedBottomCode, Inbox, Keyboard, Layers, Lock, Plus, Search, Zap } from 'lucide-react'
-import { combosOf, compactCombo, formatCombo, useKeys } from '../keys'
+import { ChevronRight, Columns3, Crosshair, Flag, GitPullRequest, RefreshCw, SquareDashedBottomCode, Inbox, Keyboard, Layers, Lock, Plus, Search, Zap } from 'lucide-react'
+import { combosOf, compactCombo, formatCombo, useAction, useKeys } from '../keys'
+import { api } from '../api'
 import { useStore } from '../store'
 import type { Issue, View } from '../types'
 import { activeStage, cx, isContainer, isWork, statusTone, timeAgo } from '../lib/util'
+import { visibleKeys } from '../lib/tree'
 import { Avatar, Kbd, TypeIcon, modKey } from './bits'
 import { TicketTermLight } from './TerminalDock'
 
@@ -105,6 +107,20 @@ export function Sidebar() {
   const conn = useConnection()
   const gh = useGitHub()
   const { live } = useStore()
+  const { pushToast } = useStore()
+  const [refreshing, setRefreshing] = useState(false)
+  const refresh = useCallback(async () => {
+    if (refreshing) return
+    if (!live) { pushToast({ tone: 'dev', title: 'Demo data', detail: 'Connect Jira to refresh real tickets.' }); return }
+    setRefreshing(true)
+    try {
+      await api.refreshJira()
+      pushToast({ tone: 'dev', title: 'Refreshed from Jira', detail: 'Tickets are up to date.' })
+    } catch (err) {
+      pushToast({ tone: 'error', title: 'Refresh failed', detail: String(err) })
+    } finally { setRefreshing(false) }
+  }, [refreshing, live, pushToast])
+  useAction('jira.refresh', () => void refresh())
   const [q, setQ] = useState('')
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
 
@@ -137,32 +153,9 @@ export function Sidebar() {
     return sp === sprintSel.slice(2)
   }, [sprintSel, active, issues])
 
-  // Which tickets show, computed once per change (not per row per render):
-  // a ticket shows if it matches, or if something under it does.
-  const shown = useMemo(() => {
-    const out = new Set<string>()
-    const filtered = mine || !!query || sprintSel !== 'all'
-    const walk = (i: Issue, seen: Set<string>): boolean => {
-      if (seen.has(i.key)) return false // guards against a cycle in bad data
-      seen.add(i.key)
-      let any = false
-      for (const k of i.childKeys) {
-        const kid = issues[k]
-        if (kid && walk(kid, seen)) any = true
-      }
-      let ok = any
-      if (!any) {
-        if (isContainer(i)) ok = !filtered && !i.childKeys.some(k => issues[k]) // empty initiatives/epics in "Everything"
-        else ok = (!mine || i.assignee?.id === me?.id)
-          && (!query || i.key.toLowerCase().includes(query) || i.summary.toLowerCase().includes(query))
-          && sprintOk(i)
-      }
-      if (ok) out.add(i.key)
-      return ok
-    }
-    for (const r of roots) walk(r, new Set())
-    return out
-  }, [issues, roots, mine, query, me?.id, sprintSel, sprintOk])
+  // Which tickets show, computed once per change (not per row per render).
+  const shown = useMemo(() => visibleKeys(issues, roots, { mine, me: me?.id, query, sprintOk, filtered: mine || !!query || sprintSel !== 'all' }),
+    [issues, roots, mine, query, me?.id, sprintSel, sprintOk])
   const visible = (i: Issue) => shown.has(i.key)
 
   const select = (k: string) => { setFocusKey(k); setView('focus') }
@@ -218,6 +211,11 @@ export function Sidebar() {
           <div className={cx('ws-sub', `conn-${conn.state}`)} title={conn.hint}>
             <span className="conn-dot" /> {conn.label}
             {(conn.state === 'none' || (conn.state === 'error' && !live)) && <span className="mock-tag">demo data</span>}
+            {live && (
+              <button className={cx('refresh-btn', 'no-drag', refreshing && 'busy')} title="Refresh from Jira now (Shift+R)" onClick={() => void refresh()}>
+                <RefreshCw size={11} />
+              </button>
+            )}
           </div>
           {gh && (
             <div className={cx('ws-sub', 'gh-sub', `conn-${gh.state}`)} title={gh.hint}>
