@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -50,7 +51,7 @@ func (a *App) GetConnection() Connection {
 // the demo mock. It always ends by closing a.ready.
 func (a *App) connect() {
 	conn := Connection{Mode: "connecting"}
-	j := a.cfg.Jira
+	j := a.conf().Jira
 	if j.Transport == config.TransportREST && j.Site != "" {
 		conn.Configured, conn.Deployment = true, string(j.Deployment)
 		if u, err := url.Parse(j.Site); err == nil {
@@ -71,7 +72,7 @@ func (a *App) connect() {
 	}
 
 	// Config vs. Jira (configuration spec 18.2–18.6): log, never block.
-	for _, p := range setup.CheckAgainst(a.cfg, lt.Discovery()) {
+	for _, p := range setup.CheckAgainst(a.conf(), lt.Discovery()) {
 		level := slog.LevelWarn
 		if p.Severity == config.SeverityError {
 			level = slog.LevelError
@@ -79,8 +80,8 @@ func (a *App) connect() {
 		a.log.Log(context.Background(), level, "config does not match Jira", "key", p.Path, "problem", p.Message)
 	}
 
-	rules, repo := liveRules(a.cfg, lt.Meta())
-	fl := flow.NewEngineWith(lt, flow.Options{Rules: rules, Repo: repo, Poke: a.pokeDev})
+	rules, repo := liveRules(a.conf(), lt.Meta())
+	fl := flow.NewEngineWith(lt, flow.Options{Rules: rules, Repo: repo, Poke: a.pokeDev, Naming: namingFrom(a.conf())})
 	st := lt.Status()
 	conn.Mode, conn.State, conn.LastSync, conn.Issues = "live", string(st.State), st.LastSync, st.Issues
 	a.mu.Lock()
@@ -93,7 +94,7 @@ func (a *App) connect() {
 }
 
 func (a *App) startLive() (*live.Tracker, error) {
-	client, err := setup.Connect(a.cfg, secrets.NewStore(), a.log.With("component", "jira"))
+	client, err := setup.Connect(a.conf(), secrets.NewStore(), a.log.With("component", "jira"))
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +104,7 @@ func (a *App) startLive() (*live.Tracker, error) {
 	}
 	var lt *live.Tracker
 	lt = live.New(live.Options{
-		Client: client, Config: a.cfg, CacheDir: cacheDir,
+		Client: client, Config: a.conf(), CacheDir: cacheDir,
 		OnChange: func(c live.Change) { a.onTrackerChange(c) },
 		OnStatus: func(s live.Status) { a.onTrackerStatus(s) },
 	})
@@ -119,7 +120,9 @@ func (a *App) useDemo(conn Connection, reason string) {
 	tr := tracker.NewMock()
 	conn.Mode, conn.Error = "demo", reason
 	a.mu.Lock()
-	a.tracker, a.flow, a.conn = tr, flow.NewEngine(tr), conn
+	fl := flow.NewEngine(tr)
+	fl.SetNaming(namingFrom(a.conf()))
+	a.tracker, a.flow, a.conn = tr, fl, conn
 	a.mu.Unlock()
 	close(a.ready)
 	a.log.Info("tracker ready", "mode", "demo", "reason", reason)
@@ -182,7 +185,8 @@ func liveRules(cfg *config.Config, meta tracker.Meta) ([]flow.Rule, string) {
 			}
 		}
 		rules = append(rules, flow.Rule{ID: fmt.Sprintf("r%d", i+1), Trigger: flow.Trigger(r.Trigger),
-			Label: flow.TriggerLabel(flow.Trigger(r.Trigger)), ToStatus: to, Enabled: r.IsEnabled()})
+			Label: flow.TriggerLabel(flow.Trigger(r.Trigger)), ToStatus: to, Enabled: r.IsEnabled(),
+			Projects: orEmpty(r.Projects), IssueTypes: orEmpty(r.IssueTypes)})
 	}
 	repo := ""
 	for _, p := range cfg.Projects {
@@ -192,6 +196,13 @@ func liveRules(cfg *config.Config, meta tracker.Meta) ([]flow.Rule, string) {
 		}
 	}
 	return rules, repo
+}
+
+// namingFrom reads dev.branch and dev.pr.
+func namingFrom(cfg *config.Config) flow.Naming {
+	b, pr := cfg.Dev.Branch, cfg.Dev.PR
+	return flow.Naming{BranchTemplate: b.Template, Prefix: orEmptyMap(maps.Clone(b.Prefix)), SlugWords: b.SlugWords,
+		PRTitle: pr.TitleTemplate, PRBody: pr.BodyTemplate, MergeMethod: pr.MergeMethod}
 }
 
 func explainConnectError(err error) string {

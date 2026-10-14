@@ -1,0 +1,68 @@
+[
+  {
+    "name": "default story",
+    "issue": { "key": "PLAT-142", "summary": "Health-gated traffic shifting for canary deploys", "type": "story", "url": "https://acme.atlassian.net/browse/PLAT-142" },
+    "branch": "feature/PLAT-142-health-gated-traffic-shifting-for",
+    "title": "[PLAT-142] Health-gated traffic shifting for canary deploys",
+    "body": "Jira: https://acme.atlassian.net/browse/PLAT-142"
+  },
+  {
+    "name": "default bug uses the bug prefix",
+    "issue": { "key": "MOB-7", "summary": "Crash on login (iOS 17)!", "type": "bug", "url": "https://x/browse/MOB-7" },
+    "branch": "fix/MOB-7-crash-on-login-ios-17",
+    "title": "[MOB-7] Crash on login (iOS 17)!",
+    "body": "Jira: https://x/browse/MOB-7"
+  },
+  {
+    "name": "secured issue keeps its summary out",
+    "issue": { "key": "SECR-1", "summary": "Leaky secret", "type": "task", "security": "Internal", "url": "https://x/browse/SECR-1" },
+    "branch": "feature/SECR-1",
+    "title": "[SECR-1]",
+    "body": "Jira: https://x/browse/SECR-1"
+  },
+  {
+    "name": "custom templates and prefixes",
+    "naming": {
+      "branchTemplate": "{project}/{type}/{key}_{slug}",
+      "prefix": { "default": "feat" },
+      "slugWords": 2,
+      "prTitle": "{key}: {summary}",
+      "prBody": "Closes {url}\n\nBranch: {branch}\n{unknown}",
+      "mergeMethod": "rebase"
+    },
+    "issue": { "key": "OPS-12", "summary": "Rotate the build keys", "type": "task", "url": "https://x/browse/OPS-12" },
+    "branch": "OPS/task/OPS-12_rotate-the",
+    "title": "OPS-12: Rotate the build keys",
+    "body": "Closes https://x/browse/OPS-12\n\nBranch: OPS/task/OPS-12_rotate-the\n{unknown}"
+  },
+  {
+    "name": "no prefix for the type leaves no stray slash; secured title has no dangling colon",
+    "naming": {
+      "branchTemplate": "{prefix}/{key} {slug}",
+      "prefix": {},
+      "slugWords": 3,
+      "prTitle": "{key}: {summary}",
+      "prBody": "{summary}",
+      "mergeMethod": "squash"
+    },
+    "issue": { "key": "PLAT-9", "summary": "Fix  the..thing", "type": "epic", "security": "x", "url": "" },
+    "branch": "PLAT-9",
+    "title": "PLAT-9",
+    "body": ""
+  },
+  {
+    "name": "characters git refuses are replaced",
+    "naming": {
+      "branchTemplate": "{key}~{slug}..wip",
+      "prefix": { "default": "feature" },
+      "slugWords": 5,
+      "prTitle": "[{key}] {summary}",
+      "prBody": "",
+      "mergeMethod": "merge"
+    },
+    "issue": { "key": "A-1", "summary": "a", "type": "story", "url": "" },
+    "branch": "A-1-a-wip",
+    "title": "[A-1] a",
+    "body": ""
+  }
+]

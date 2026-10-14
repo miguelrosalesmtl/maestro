@@ -58,6 +58,10 @@ export function GetLogInfo() {
   return window['go']['main']['App']['GetLogInfo']();
 }
 
+export function GetSettings() {
+  return window['go']['main']['App']['GetSettings']();
+}
+
 export function GetTransitions(arg1) {
   return window['go']['main']['App']['GetTransitions'](arg1);
 }
@@ -90,12 +94,16 @@ export function SaveKeybindings(arg1) {
   return window['go']['main']['App']['SaveKeybindings'](arg1);
 }
 
-export function SearchBoards(arg1) {
-  return window['go']['main']['App']['SearchBoards'](arg1);
+export function SaveRules(arg1) {
+  return window['go']['main']['App']['SaveRules'](arg1);
 }
 
-export function SetRuleStatus(arg1, arg2) {
-  return window['go']['main']['App']['SetRuleStatus'](arg1, arg2);
+export function SaveSettings(arg1) {
+  return window['go']['main']['App']['SaveSettings'](arg1);
+}
+
+export function SearchBoards(arg1) {
+  return window['go']['main']['App']['SearchBoards'](arg1);
 }
 
 export function SimulateNextEvent(arg1) {
@@ -114,6 +122,10 @@ export function TermClose(arg1) {
   return window['go']['main']['App']['TermClose'](arg1);
 }
 
+export function TermHistory(arg1) {
+  return window['go']['main']['App']['TermHistory'](arg1);
+}
+
 export function TermOpen(arg1, arg2, arg3) {
   return window['go']['main']['App']['TermOpen'](arg1, arg2, arg3);
 }
@@ -130,10 +142,6 @@ export function TermWrite(arg1, arg2) {
   return window['go']['main']['App']['TermWrite'](arg1, arg2);
 }
 
-export function ToggleRule(arg1) {
-  return window['go']['main']['App']['ToggleRule'](arg1);
-}
-
 export function TransitionIssue(arg1, arg2) {
   return window['go']['main']['App']['TransitionIssue'](arg1, arg2);
 }
@@ -144,4 +152,8 @@ export function UnlinkIssues(arg1, arg2, arg3) {
 
 export function UpdateFields(arg1, arg2) {
   return window['go']['main']['App']['UpdateFields'](arg1, arg2);
+}
+
+export function UseConfigLayers(arg1) {
+  return window['go']['main']['App']['UseConfigLayers'](arg1);
 }

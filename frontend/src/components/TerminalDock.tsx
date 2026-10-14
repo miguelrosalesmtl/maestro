@@ -8,19 +8,22 @@ import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { api } from '../api'
 import { sessionTicket, ticketLight, useStore } from '../store'
 import type { TermLightState } from '../types'
-import { branchFor, cx, isWork, statusTone } from '../lib/util'
+import { cx, isWork, statusTone } from '../lib/util'
+import { branchName, prCreateCommand, prMergeCommand } from '../lib/naming'
 import { StatusMenu, TypeIcon } from './bits'
 import { isAppShortcut, useAction } from '../keys'
 import { reportError } from '../lib/errors'
 
 // One global listener fans PTY output out to the pane that owns the ticket.
-const writers = new Map<string, (b: Uint8Array) => void>()
-EventsOn('term:data', (key: string, b64: string) => {
+// end is the session's output length after the chunk (see TermPane).
+const writers = new Map<string, (b: Uint8Array, end: number) => void>()
+const decode = (b64: string) => {
   const bin = atob(b64)
   const bytes = new Uint8Array(bin.length)
   for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
-  writers.get(key)?.(bytes)
-})
+  return bytes
+}
+EventsOn('term:data', (key: string, b64: string, end: number) => writers.get(key)?.(decode(b64), end))
 const focusers = new Map<string, () => void>()
 
 /**
@@ -74,12 +77,28 @@ export const TermPane = memo(function TermPane({ session, active, banner }: { se
     term.open(host.current!)
     safeFit()
 
-    writers.set(session, b => term.write(b))
+    // Output is numbered by its end offset. A pane recreated while its shell
+    // kept running (a reload, an error recovery) refills from the backend's
+    // history; output that arrives meanwhile waits, and nothing is written twice.
+    let shown = 0, ready = false
+    const queued: [Uint8Array, number][] = []
+    const write = (b: Uint8Array, end: number) => {
+      if (end <= shown) return
+      const start = end - b.length
+      term.write(start < shown ? b.subarray(shown - start) : b)
+      shown = end
+    }
+    const flush = () => { ready = true; for (const [b, e] of queued.splice(0)) write(b, e) }
+    writers.set(session, (b, end) => { if (ready) write(b, end); else queued.push([b, end]) })
     focusers.set(session, () => term.focus())
-    api.termOpen(session, term.cols, term.rows).then(created => {
+    api.termOpen(session, term.cols, term.rows).then(async created => {
       if (created) term.write(banner(session))
-      else api.termWrite(session, '\r') // reattached: ask the shell to redraw its prompt
-    })
+      else {
+        // Never type into the shell here: a program waiting for input would take it.
+        const h = await api.termHistory(session).catch(() => null)
+        if (h?.data) write(decode(h.data), h.end)
+      }
+    }).finally(flush)
     const d1 = term.onData(d => api.termWrite(session, d))
     const d2 = term.onResize(({ cols, rows }) => api.termResize(session, cols, rows))
     const ro = new ResizeObserver(() => safeFit())
@@ -126,10 +145,10 @@ function clampHeight(h: number, viewport: number) {
 const terminalHasFocus = () => !!document.activeElement?.closest('.xterm')
 
 export function TerminalDock() {
-  const { termOpen, setTermOpen, termSessions, activeSession, selectSession, openTerminal, closeTerminal, focusKey, issues, flows, termActivity, view } = useStore()
-  // Freestyle has its own full-size terminals; the ticket dock steps aside
-  // (its shells keep running) and leaves the terminal shortcuts to that view.
-  const away = view === 'freestyle'
+  const { termOpen, setTermOpen, termSessions, activeSession, selectSession, openTerminal, closeTerminal, focusKey, issues, flows, termActivity, view, naming, commands } = useStore()
+  // Freestyle has its own full-size terminals and Settings needs the room:
+  // the ticket dock steps aside (its shells keep running).
+  const away = view === 'freestyle' || view === 'settings'
   // The panel's height is a share of the window, so it scales with the screen;
   // dragging the edge changes the share, which is remembered.
   const [share, setShare] = useState(loadShare)
@@ -202,16 +221,17 @@ export function TerminalDock() {
     focusers.get(active)?.()
   }
 
-  // Secured issues: never put the summary in a branch or PR title.
-  const safeSummary = issue?.security ? '' : issue?.summary ?? ''
-  const branch = flow?.branch || ''
+  // Names come from Settings (branch and PR templates). A secured issue's
+  // summary never goes into a branch or PR (naming.ts leaves it out).
+  const branch = flow?.branch || (issue ? branchName(naming, issue) : '')
   const chips: { label: string; cmd: string; show: boolean }[] = issue ? [
-    { label: 'create branch', cmd: `git checkout -b ${branchFor(issue.key, safeSummary, issue.type)}`, show: !flow?.started },
+    { label: 'create branch', cmd: `git checkout -b ${branch}`, show: !flow?.started },
     { label: 'checkout', cmd: `git checkout ${branch}`, show: !!flow?.started },
     { label: 'commit', cmd: `git commit -am "${issue.key}: "`, show: true },
-    { label: 'push', cmd: `git push -u origin ${branch || '$MAESTRO_BRANCH'}`, show: true },
-    { label: 'open PR', cmd: `gh pr create --title "[${issue.key}]${safeSummary ? ' ' + safeSummary.replace(/"/g, '\\"') : ''}" --body "Jira: ${issue.url}"`, show: !flow?.pr },
-    { label: 'merge PR', cmd: 'gh pr merge --squash --delete-branch', show: !!flow?.pr && flow.pr.state !== 'merged' },
+    { label: 'push', cmd: `git push -u origin ${flow?.branch || '$MAESTRO_BRANCH'}`, show: true },
+    { label: 'open PR', cmd: prCreateCommand(naming, issue, branch), show: !flow?.pr },
+    { label: 'merge PR', cmd: prMergeCommand(naming), show: !!flow?.pr && flow.pr.state !== 'merged' },
+    ...commands.map(c => ({ label: c.label, cmd: c.command, show: true })),
   ] : []
 
   // Stable for the memoized panes; reads the latest data when called.

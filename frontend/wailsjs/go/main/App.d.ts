@@ -34,6 +34,8 @@ export function GetKeybindings():Promise<main.KeybindingsInfo>;
 
 export function GetLogInfo():Promise<main.LogInfo>;
 
+export function GetSettings():Promise<main.Settings>;
+
 export function GetTransitions(arg1:string):Promise<Array<tracker.Transition>>;
 
 export function LinkIssues(arg1:string,arg2:string,arg3:string):Promise<Array<tracker.Issue>>;
@@ -50,9 +52,11 @@ export function ResetFlow(arg1:string):Promise<flow.StepResult>;
 
 export function SaveKeybindings(arg1:config.Keybindings):Promise<main.KeybindingsInfo>;
 
-export function SearchBoards(arg1:string):Promise<Array<tracker.BoardInfo>>;
+export function SaveRules(arg1:Array<flow.Rule>):Promise<Array<flow.Rule>>;
 
-export function SetRuleStatus(arg1:string,arg2:string):Promise<Array<flow.Rule>>;
+export function SaveSettings(arg1:main.Settings):Promise<main.Settings>;
+
+export function SearchBoards(arg1:string):Promise<Array<tracker.BoardInfo>>;
 
 export function SimulateNextEvent(arg1:string):Promise<flow.StepResult>;
 
@@ -62,6 +66,8 @@ export function StartWork(arg1:string):Promise<flow.StepResult>;
 
 export function TermClose(arg1:string):Promise<void>;
 
+export function TermHistory(arg1:string):Promise<main.TermHistory>;
+
 export function TermOpen(arg1:string,arg2:number,arg3:number):Promise<boolean>;
 
 export function TermResize(arg1:string,arg2:number,arg3:number):Promise<void>;
@@ -70,10 +76,10 @@ export function TermSessions():Promise<Array<string>>;
 
 export function TermWrite(arg1:string,arg2:string):Promise<void>;
 
-export function ToggleRule(arg1:string):Promise<Array<flow.Rule>>;
-
 export function TransitionIssue(arg1:string,arg2:string):Promise<tracker.Issue>;
 
 export function UnlinkIssues(arg1:string,arg2:string,arg3:string):Promise<Array<tracker.Issue>>;
 
 export function UpdateFields(arg1:string,arg2:tracker.FieldPatch):Promise<tracker.Issue>;
+
+export function UseConfigLayers(arg1:config.Layers):Promise<void>;

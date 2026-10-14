@@ -63,8 +63,8 @@ func githubTokens(gh config.GitHub, host string) github.TokenSource {
 // startDevSync starts watching pull requests and local branches for the
 // tickets of the live tracker. known says whether a key is a synced issue.
 func (a *App) startDevSync(fl *flow.Engine, tr tracker.Tracker, known func(string) bool) {
-	gh := a.cfg.Dev.GitHub
-	repos := configRepos(a.cfg)
+	gh := a.conf().Dev.GitHub
+	repos := configRepos(a.conf())
 	host := github.WebHost(gh.APIURL)
 	if !gh.IsEnabled() || len(repos) == 0 {
 		msg := "Add repositories under projects[].repos to follow pull requests."
@@ -83,12 +83,12 @@ func (a *App) startDevSync(fl *flow.Engine, tr tracker.Tracker, known func(strin
 		return
 	}
 	linker, _ := tr.(tracker.PRLinker)
-	if wb := a.cfg.Jira.WriteBack.RemoteLinks; wb != nil && !*wb {
+	if wb := a.conf().Jira.WriteBack.RemoteLinks; wb != nil && !*wb {
 		linker = nil
 	}
 	w, err := devsync.New(devsync.Options{
-		Client: client, Host: host, Repos: repos, KeyPattern: a.cfg.Dev.KeyPattern, Known: known,
-		RequiredChecks: a.cfg.Dev.Checks.Required, RequiredApprovals: a.cfg.Dev.Review.RequiredApprovals,
+		Client: client, Host: host, Repos: repos, KeyPattern: a.conf().Dev.KeyPattern, Known: known,
+		RequiredChecks: a.conf().Dev.Checks.Required, RequiredApprovals: a.conf().Dev.Review.RequiredApprovals,
 		Interval: time.Duration(gh.PollSeconds) * time.Second, Logger: a.log,
 		OnStatus: a.setGitHubStatus,
 		Apply: func(key string, ds flow.DevState, fire bool) {

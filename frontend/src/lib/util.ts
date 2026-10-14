@@ -82,12 +82,6 @@ export function cx(...c: (string | false | null | undefined)[]) {
   return c.filter(Boolean).join(' ')
 }
 
-/** Branch name Maestro suggests for a ticket (mirrors flow.BranchName in Go). */
-export function branchFor(key: string, summary: string, type: string) {
-  const slug = summary.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').split('-').slice(0, 5).join('-')
-  return `${type === 'bug' ? 'fix' : 'feature'}/${key}-${slug}`
-}
-
 /** "Nov 1, 2026" for a YYYY-MM-DD date (no time zone shift). */
 export function formatDay(d: string): string {
   const [y, m, day] = d.split('-').map(Number)

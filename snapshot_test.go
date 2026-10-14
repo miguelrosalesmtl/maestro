@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"maestro/internal/config"
 	"maestro/internal/flow"
 	"maestro/internal/tracker"
 )
@@ -20,7 +21,7 @@ func (emptySite) Users() []tracker.User       { return nil }
 // never null, because the UI indexes them on its first render.
 func TestSnapshotHasNoNulls(t *testing.T) {
 	tr := emptySite{tracker.NewMock()}
-	a := &App{ready: make(chan struct{}), tracker: tr, flow: flow.NewEngineWith(tr, flow.Options{})}
+	a := &App{cfg: config.Default(), ready: make(chan struct{}), tracker: tr, flow: flow.NewEngineWith(tr, flow.Options{})}
 	close(a.ready)
 
 	b, err := json.Marshal(a.Snapshot())

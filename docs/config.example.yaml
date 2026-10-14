@@ -121,6 +121,7 @@ automation:
   assignOnStart: true
   rules:                                         # AUT-01; "to" = Maestro state or Jira status
     - { trigger: branch_created,    to: inProgress }
+    # - { trigger: branch_created, to: inProgress, projects: [PLAT], issueTypes: [bug] }   # AUT-02: limit a rule
     - { trigger: pr_opened,         to: inReview }
     - { trigger: changes_requested, to: inProgress }
     - { trigger: pr_merged,         to: done }
@@ -143,6 +144,15 @@ log:
   level: info                                    # debug | info | warn | error (env MAESTRO_LOG_LEVEL wins)
 
 terminal:
+  # shell: zsh                                   # default: your login shell ($SHELL)
+  # env: { AWS_PROFILE: dev }                    # every terminal (MAESTRO_* are Maestro's)
+  # startup: ["nvm use"]                         # typed into every new terminal
+  # commands:                                    # extra one-click buttons above the ticket terminal
+  #   - { label: test, command: "make test" }
+  # projects:                                    # per project, on top of the above
+  #   PLAT:
+  #     env: { KUBECONFIG: ~/.kube/plat }
+  #     startup: ["source .venv/bin/activate"]
   notify:                                        # activity light + chirp for ticket terminals
     enabled: true
     sound: true

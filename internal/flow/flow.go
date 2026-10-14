@@ -9,7 +9,6 @@ package flow
 import (
 	"fmt"
 	"log/slog"
-	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -113,6 +112,25 @@ type Rule struct {
 	Label    string  `json:"label"`
 	ToStatus string  `json:"toStatus"`
 	Enabled  bool    `json:"enabled"`
+	// Projects and IssueTypes (roles, e.g. "bug") limit the rule; empty = all.
+	Projects   []string `json:"projects"`
+	IssueTypes []string `json:"issueTypes"`
+}
+
+// Applies reports whether the rule covers an issue.
+func (r Rule) Applies(is tracker.Issue) bool {
+	inList := func(list []string, v string) bool {
+		if len(list) == 0 {
+			return true
+		}
+		for _, x := range list {
+			if strings.EqualFold(x, v) {
+				return true
+			}
+		}
+		return false
+	}
+	return inList(r.Projects, Project(is.Key)) && inList(r.IssueTypes, string(is.Type))
 }
 
 // StepResult is what the UI receives after any flow mutation.
@@ -132,6 +150,7 @@ type Engine struct {
 	repo   string
 	sim    bool
 	poke   func(key string)
+	naming Naming
 }
 
 // DefaultRules are the demo rules (status names of the mock tracker).
@@ -163,6 +182,8 @@ type Options struct {
 	Simulate bool
 	// Poke asks the dev watcher to look again soon (after git push, gh pr …).
 	Poke func(key string)
+	// Naming builds branch names (zero value: DefaultNaming).
+	Naming Naming
 }
 
 // NewEngine is the demo engine used with the mock tracker.
@@ -171,7 +192,10 @@ func NewEngine(tr tracker.Tracker) *Engine {
 }
 
 func NewEngineWith(tr tracker.Tracker, o Options) *Engine {
-	e := &Engine{tr: tr, flows: map[string]*Flow{}, repo: o.Repo, rules: append([]Rule(nil), o.Rules...), sim: o.Simulate, poke: o.Poke}
+	e := &Engine{tr: tr, flows: map[string]*Flow{}, repo: o.Repo, rules: append([]Rule(nil), o.Rules...), sim: o.Simulate, poke: o.Poke, naming: o.Naming}
+	if e.naming.BranchTemplate == "" {
+		e.naming = DefaultNaming()
+	}
 	if o.Seed {
 		e.seed()
 	}
@@ -189,24 +213,8 @@ func blankStages() []Stage {
 	}
 }
 
-var nonSlug = regexp.MustCompile(`[^a-z0-9]+`)
-
-// BranchName derives a git branch from the ticket, e.g. feature/PLAT-142-health-gated-traffic.
-// A secured issue's summary never goes into a branch name.
-func BranchName(is tracker.Issue) string {
-	prefix := "feature"
-	if is.Type == tracker.TypeBug {
-		prefix = "fix"
-	}
-	if is.Security != "" {
-		return prefix + "/" + is.Key
-	}
-	slug := strings.Trim(nonSlug.ReplaceAllString(strings.ToLower(is.Summary), "-"), "-")
-	if parts := strings.Split(slug, "-"); len(parts) > 5 {
-		slug = strings.Join(parts[:5], "-")
-	}
-	return fmt.Sprintf("%s/%s-%s", prefix, is.Key, slug)
-}
+// BranchName is the branch for a ticket with the default naming.
+func BranchName(is tracker.Issue) string { return DefaultNaming().Branch(is) }
 
 func ts(d time.Duration) string { return time.Now().Add(-d).UTC().Format(time.RFC3339) }
 
@@ -228,6 +236,31 @@ func (e *Engine) Flow(key string) Flow {
 func (e *Engine) Rules() []Rule {
 	e.mu.Lock()
 	defer e.mu.Unlock()
+	return append([]Rule{}, e.rules...)
+}
+
+// Naming is how this engine names branches and pull requests.
+func (e *Engine) Naming() Naming {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.naming
+}
+
+// SetNaming changes branch and pull request naming (from Settings).
+func (e *Engine) SetNaming(n Naming) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.naming = n
+}
+
+// BranchFor is the branch Maestro suggests for a ticket that has none yet.
+func (e *Engine) BranchFor(is tracker.Issue) string { return e.Naming().Branch(is) }
+
+// SetRules replaces the automation rules (from the Automations view).
+func (e *Engine) SetRules(rules []Rule) []Rule {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.rules = append([]Rule{}, rules...)
 	return append([]Rule{}, e.rules...)
 }
 
@@ -297,7 +330,7 @@ func (e *Engine) fire(key string, trig Trigger) []Event {
 			continue
 		}
 		is, err := e.tr.GetIssue(key)
-		if err != nil || is.Status == r.ToStatus {
+		if err != nil || is.Status == r.ToStatus || !r.Applies(is) {
 			continue
 		}
 		if _, err := e.tr.Transition(key, r.ToStatus); err != nil {
@@ -356,7 +389,7 @@ func (e *Engine) start(key string) (StepResult, error) {
 		return e.result(f, nil)
 	}
 	f.Started = true
-	f.Branch = BranchName(is)
+	f.Branch = e.naming.Branch(is)
 	f.complete("branch", f.Branch)
 	evs := []Event{e.emit(key, "dev", "Branch created", f.Branch, "")}
 	evs = append(evs, e.fire(key, TriggerBranchCreated)...)

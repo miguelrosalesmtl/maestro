@@ -207,6 +207,9 @@ func validateDev(c *collector, d *Dev) {
 		}
 	}
 	between(c, "dev.branch.slugWords", d.Branch.SlugWords, 1, 12)
+	if strings.TrimSpace(d.PR.TitleTemplate) == "" {
+		c.errorf("dev.pr.titleTemplate", "required, e.g. \"[{key}] {summary}\"")
+	}
 	oneOf(c, "dev.pr.mergeMethod", d.PR.MergeMethod, "merge", "squash", "rebase")
 	if _, err := regexp.Compile(d.KeyPattern); err != nil {
 		c.errorf("dev.keyPattern", "not a valid regular expression: %v", err)
@@ -238,6 +241,11 @@ func validateAutomation(c *collector, cfg *Config) {
 				c.errorf(path+".projects", "%q is not a project key", p)
 			}
 		}
+		for _, t := range r.IssueTypes {
+			if !slices.Contains(Roles, Role(strings.ToLower(t))) {
+				c.errorf(path+".issueTypes", "%q is not an issue type; use %v", t, Roles)
+			}
+		}
 		if !r.IsEnabled() {
 			continue
 		}
@@ -254,6 +262,13 @@ func validateTerminalAgentUI(c *collector, cfg *Config) {
 		if q.Label == "" || q.Command == "" {
 			c.errorf(fmt.Sprintf("terminal.commands[%d]", i), "needs label and command")
 		}
+	}
+	envNames(c, "terminal.env", cfg.Terminal.Env)
+	for k, p := range cfg.Terminal.Projects {
+		if !projectKey.MatchString(k) {
+			c.errorf("terminal.projects."+k, "%q is not a project key", k)
+		}
+		envNames(c, "terminal.projects."+k+".env", p.Env)
 	}
 	between(c, "terminal.notify.minSeconds", cfg.Terminal.Notify.MinSeconds, 0, 3600)
 	between(c, "terminal.notify.waitSeconds", cfg.Terminal.Notify.WaitSeconds, 2, 600)
@@ -355,5 +370,19 @@ func validateFieldsSprintsVersions(c *collector, cfg *Config) {
 	}
 	if !strings.Contains(cfg.Versions.ReleaseNotesTemplate, "{key}") {
 		c.errorf("versions.releaseNotesTemplate", "must contain {key}")
+	}
+}
+
+var envName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// envNames checks variable names; MAESTRO_* belong to Maestro.
+func envNames(c *collector, path string, env map[string]string) {
+	for k := range env {
+		switch {
+		case !envName.MatchString(k):
+			c.errorf(path+"."+k, "not a valid variable name")
+		case strings.HasPrefix(k, "MAESTRO_"):
+			c.errorf(path+"."+k, "MAESTRO_ variables are set by Maestro")
+		}
 	}
 }

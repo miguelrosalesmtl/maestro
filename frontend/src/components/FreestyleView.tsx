@@ -10,7 +10,7 @@ import { TermLight, TermPane } from './TerminalDock'
  * anything else. Shells start in the home folder, get no ticket variables,
  * and their git/gh commands never move a ticket.
  */
-export function FreestyleView() {
+export function FreestyleView({ shown }: { shown: boolean }) {
   const { freeSessions, activeFree, selectFree, newFree, closeFree, renameFree, termActivity } = useStore()
   const [editing, setEditing] = useState<string | null>(null)
   const active = activeFree && freeSessions.some(f => f.id === activeFree) ? activeFree : freeSessions.at(-1)?.id ?? null
@@ -28,10 +28,10 @@ export function FreestyleView() {
   // Arriving with no terminal opens one: this view is only terminals.
   // (Deferred and cancelled on unmount, so a double mount opens only one.)
   useEffect(() => {
-    if (freeSessions.length) return
+    if (!shown || freeSessions.length) return
     const t = setTimeout(() => newFree(), 0)
     return () => clearTimeout(t)
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [shown]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const cycle = (d: number) => {
     if (!freeSessions.length) return
@@ -39,15 +39,16 @@ export function FreestyleView() {
     selectFree(freeSessions[(i + d + freeSessions.length) % freeSessions.length].id)
   }
   const focusActive = () => { if (active) selectFree(active); else newFree() }
-  useAction('terminal.new', () => { newFree() })
-  useAction('terminal.next', () => cycle(1))
-  useAction('terminal.prev', () => cycle(-1))
-  useAction('terminal.close', () => { if (active) closeFree(active) })
-  useAction('terminal.focus', focusActive)
+  // Hidden (another view is open): the ticket dock owns the terminal keys.
+  useAction('terminal.new', () => { newFree() }, shown)
+  useAction('terminal.next', () => cycle(1), shown)
+  useAction('terminal.prev', () => cycle(-1), shown)
+  useAction('terminal.close', () => { if (active) closeFree(active) }, shown)
+  useAction('terminal.focus', focusActive, shown)
   useAction('terminal.toggle', () => {
     if (document.activeElement?.closest('.xterm')) (document.activeElement as HTMLElement).blur()
     else focusActive()
-  })
+  }, shown)
 
   return (
     <div className="freestyle">

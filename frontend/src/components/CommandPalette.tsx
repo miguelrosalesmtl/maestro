@@ -2,11 +2,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowRight, Columns3, Crosshair, FastForward, FolderOpen, Inbox, Layers, Maximize2, Play, Plus, Search, SquareTerminal, Volume2, VolumeX, Zap } from 'lucide-react'
 import { api } from '../api'
 import { useStore } from '../store'
-import { branchFor, cx, isContainer, statusTone, typeMeta } from '../lib/util'
+import { cx, isContainer, statusTone, typeMeta } from '../lib/util'
 import { typeInTerminal } from './TerminalDock'
 import { compactCombo, useKeys } from '../keys'
 import { StatusPill, TypeIcon } from './bits'
 import type { ReactNode } from 'react'
+import { branchName } from '../lib/naming'
 
 interface Item {
   id: string
@@ -35,7 +36,7 @@ export function CommandPalette() {
     const out: Item[] = []
     if (focus) {
       if (s.live) out.push({ id: 'start', group: `Actions · ${focus.key}`, icon: <Play size={15} />, label: <>Start work on <b>{focus.key}</b> in the terminal</>, text: `start work terminal ${focus.key}`,
-        run: () => { const session = s.openTerminal(focus.key); void typeInTerminal(session, `git checkout -b ${branchFor(focus.key, focus.security ? '' : focus.summary, focus.type)}`) } })
+        run: () => { const session = s.openTerminal(focus.key); void typeInTerminal(session, `git checkout -b ${branchName(s.naming, focus)}`) } })
       else if (!f?.started) out.push({ id: 'start', group: `Actions · ${focus.key}`, icon: <Play size={15} />, label: <>Start work on <b>{focus.key}</b></>, text: `start work ${focus.key}`, run: () => s.startWork(focus.key) })
       else if (f.pr?.state !== 'merged') out.push({ id: 'next', group: `Actions · ${focus.key}`, icon: <FastForward size={15} />, label: <>Simulate next dev event</>, text: 'simulate next event', run: () => s.nextEvent(focus.key) })
       out.push({ id: 'jira', group: `Actions · ${focus.key}`, icon: <Maximize2 size={15} />, label: <>Open Jira view</>, text: `open jira view ${focus.key}`, hint: compactCombo(bindings['jira.open']), run: () => s.openJira(focus.key) })

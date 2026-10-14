@@ -3,6 +3,7 @@
 package term
 
 import (
+	"bytes"
 	"fmt"
 	"log/slog"
 	"os"
@@ -27,11 +28,20 @@ type Context struct {
 	Summary string `json:"summary"`
 	Branch  string `json:"branch"`
 	Dir     string `json:"dir"`
+
+	// From config terminal: the shell ("" = $SHELL), extra environment
+	// ("NAME=value", before the MAESTRO_ variables so those win) and commands
+	// typed into the shell once it starts.
+	Shell   string   `json:"-"`
+	Env     []string `json:"-"`
+	Startup []string `json:"-"`
 }
 
 // Hooks lets the app react to session output and to commands the user runs.
 type Hooks struct {
-	OnData    func(key string, data []byte)
+	// OnData gets each chunk of output; end is the session's output length
+	// after it, so a reattached view can line it up with History.
+	OnData    func(key string, data []byte, end int64)
 	OnExit    func(key string)
 	OnCommand func(key, line string)
 	// OnActivity reports running / waiting / idle changes (see activity.go).
@@ -45,7 +55,11 @@ type session struct {
 	line   []byte // current input line, for command detection
 
 	lastOutput atomic.Int64 // unix nanos of the last PTY output
-	act        actState     // owned by the monitor goroutine
+
+	histMu sync.Mutex
+	hist   []byte   // the latest output, so a reopened view is not blank
+	total  int64    // bytes of output so far
+	act    actState // owned by the monitor goroutine
 }
 
 type Manager struct {
@@ -97,9 +111,14 @@ func (m *Manager) Open(c Context, cols, rows uint16) (bool, error) {
 	if dir == "" {
 		dir, _ = os.UserHomeDir()
 	}
-	cmd := exec.Command(shell(), "-l")
+	sh := c.Shell
+	if sh == "" {
+		sh = shell()
+	}
+	cmd := exec.Command(sh, "-l")
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "TERM=xterm-256color", "COLORTERM=truecolor")
+	cmd.Env = append(inheritedEnv(), "TERM=xterm-256color", "COLORTERM=truecolor")
+	cmd.Env = append(cmd.Env, c.Env...)
 	if c.Key != "" {
 		cmd.Env = append(cmd.Env, "MAESTRO_TICKET="+c.Key, "MAESTRO_SUMMARY="+c.Summary, "MAESTRO_BRANCH="+c.Branch)
 	}
@@ -111,7 +130,19 @@ func (m *Manager) Open(c Context, cols, rows uint16) (bool, error) {
 	s.lastOutput.Store(time.Now().UnixNano())
 	m.sessions[c.Session] = s
 	// Log the session, never what is typed in it (it can contain secrets).
-	slog.Info("terminal started", "component", "term", "session", c.Session, "key", c.Key, "shell", filepath.Base(shell()), "pid", cmd.Process.Pid)
+	slog.Info("terminal started", "component", "term", "session", c.Session, "key", c.Key, "shell", filepath.Base(sh), "startup", len(c.Startup), "pid", cmd.Process.Pid)
+
+	if len(c.Startup) > 0 {
+		// Typed like the user would: the shell runs them after its own startup files.
+		go func() {
+			defer applog.Recover("terminal startup " + c.Session)
+			for _, line := range c.Startup {
+				if _, err := f.Write([]byte(line + "\r")); err != nil {
+					return
+				}
+			}
+		}()
+	}
 
 	go func() {
 		defer applog.Recover("terminal " + c.Session)
@@ -121,8 +152,12 @@ func (m *Manager) Open(c Context, cols, rows uint16) (bool, error) {
 			if n > 0 {
 				s.lastOutput.Store(time.Now().UnixNano())
 			}
-			if n > 0 && m.hooks.OnData != nil {
-				m.hooks.OnData(c.Session, append([]byte(nil), buf[:n]...))
+			if n > 0 {
+				chunk := append([]byte(nil), buf[:n]...)
+				end := s.record(chunk)
+				if m.hooks.OnData != nil {
+					m.hooks.OnData(c.Session, chunk, end)
+				}
 			}
 			if err != nil {
 				break
@@ -144,6 +179,55 @@ func (m *Manager) Open(c Context, cols, rows uint16) (bool, error) {
 		}
 	}()
 	return true, nil
+}
+
+// HistoryLimit is how much recent output each session keeps for History.
+const HistoryLimit = 512 << 10
+
+// record keeps chunk in the session's history and returns the output length after it.
+func (s *session) record(chunk []byte) int64 {
+	s.histMu.Lock()
+	defer s.histMu.Unlock()
+	s.hist = append(s.hist, chunk...)
+	if len(s.hist) > HistoryLimit {
+		cut := len(s.hist) - HistoryLimit
+		// Start on a line, not in the middle of an escape sequence.
+		if i := bytes.IndexByte(s.hist[cut:], '\n'); i >= 0 && i < 4096 {
+			cut += i + 1
+		}
+		s.hist = append([]byte(nil), s.hist[cut:]...)
+	}
+	s.total += int64(len(chunk))
+	return s.total
+}
+
+// History is the session's recent output and the output length it ends at
+// (ok is false for an unknown session).
+func (m *Manager) History(session string) (data []byte, end int64, ok bool) {
+	m.mu.Lock()
+	s := m.sessions[session]
+	m.mu.Unlock()
+	if s == nil {
+		return nil, 0, false
+	}
+	s.histMu.Lock()
+	defer s.histMu.Unlock()
+	return append([]byte(nil), s.hist...), s.total, true
+}
+
+// inheritedEnv is Maestro's environment minus the markers of an AI agent
+// session that launched it (e.g. Maestro started from Claude Code): a shell
+// here is the user's, and tools in it must not think they run inside that session.
+func inheritedEnv() []string {
+	var out []string
+	for _, kv := range os.Environ() {
+		name, _, _ := strings.Cut(kv, "=")
+		if name == "CLAUDECODE" || name == "AI_AGENT" || name == "CLAUDE_PID" || name == "CLAUDE_EFFORT" || strings.HasPrefix(name, "CLAUDE_CODE_") {
+			continue
+		}
+		out = append(out, kv)
+	}
+	return out
 }
 
 // Write sends keystrokes to the session and tracks the line being typed.

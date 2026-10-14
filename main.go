@@ -35,7 +35,7 @@ func main() {
 		defer logs.Close()
 	}
 	setup.Version = version
-	cfg := loadConfig(logs)
+	cfg, layers := loadConfig(logs)
 
 	// WebKitGTK's DMA-BUF renderer is flaky on Wayland compositors (crashes in
 	// libEGL on teardown, blank windows). The user can still override it.
@@ -44,6 +44,7 @@ func main() {
 	}
 
 	app := NewApp(cfg, logs)
+	app.UseConfigLayers(layers)
 
 	err = wails.Run(&options.App{
 		Title: "Maestro",
@@ -86,16 +87,16 @@ func main() {
 
 // loadConfig reads config.yaml. Problems are logged, never fatal: the app
 // still starts (with the mock tracker) so the user can fix them in Settings.
-func loadConfig(logs *applog.Logs) *config.Config {
+func loadConfig(logs *applog.Logs) (*config.Config, *config.Layers) {
 	path, err := config.PersonalPath()
 	if err != nil {
 		slog.Error("config path", "err", err)
-		return config.Default()
+		return config.Default(), nil
 	}
 	l, err := config.Load(path)
 	if l == nil {
 		slog.Error("config unreadable", "path", path, "err", err)
-		return config.Default()
+		return config.Default(), nil
 	}
 	if l.NeedsSetup() {
 		// A fresh install is not an error: Jira is simply not connected yet.
@@ -122,5 +123,5 @@ func loadConfig(logs *applog.Logs) *config.Config {
 		}
 	}
 	slog.Info("config loaded", "path", path, "needs_setup", l.NeedsSetup(), "transport", string(l.Effective.Jira.Transport))
-	return l.Effective
+	return l.Effective, l
 }

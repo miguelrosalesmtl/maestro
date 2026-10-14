@@ -39,6 +39,8 @@ export const ACTIONS: ActionDef[] = [
   { id: 'nav.roadmap', label: 'Go to Roadmap', group: 'Navigation', scope: 'global', keys: 'mod+4', anywhere: true },
   { id: 'nav.automations', label: 'Go to Automations', group: 'Navigation', scope: 'global', keys: 'mod+5', anywhere: true },
   { id: 'nav.freestyle', label: 'Go to Freestyle terminals', group: 'Navigation', scope: 'global', keys: 'mod+6', anywhere: true },
+  { id: 'nav.settings', label: 'Open Settings', group: 'Navigation', scope: 'global', keys: 'mod+,', anywhere: true },
+  { id: 'settings.save', label: 'Save settings', group: 'Settings', scope: 'view:settings', keys: 'mod+s', anywhere: true },
   { id: 'window.fullscreen', label: 'Toggle full screen', group: 'Window', scope: 'global', keys: 'f11', anywhere: true },
   { id: 'window.maximize', label: 'Maximize / restore window', group: 'Window', scope: 'global', keys: 'mod+shift+m', anywhere: true },
 

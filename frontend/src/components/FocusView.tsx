@@ -2,16 +2,17 @@ import { useState } from 'react'
 import { ArrowUpRight, Link2, Plus, Copy, ExternalLink, FastForward, SquareTerminal, GitBranch, GitPullRequest, Play, RotateCcw, Sparkles, Terminal, Zap, GitMerge, CircleDot, Check, Loader2, X, GitPullRequestClosed, GitPullRequestDraft } from 'lucide-react'
 import { api } from '../api'
 import { useStore } from '../store'
-import type { FlowEvent } from '../types'
-import { activeStage, ancestors, branchFor, cx, isWork, linkLabel, statusTone, timeAgo } from '../lib/util'
+import type { FlowEvent, Issue } from '../types'
+import { activeStage, ancestors, cx, isWork, linkLabel, statusTone, timeAgo } from '../lib/util'
 import { Avatar, PriorityIcon, StatusMenu, StatusPill, TypeIcon } from './bits'
 import { FlowBridge } from './FlowBridge'
 import { IssueBadges } from './Badges'
 import { TicketTermLight, typeInTerminal } from './TerminalDock'
 import { useAction } from '../keys'
+import { branchName } from '../lib/naming'
 
 export function FocusView() {
-  const { issues, flows, focusKey, setFocusKey, me, openJira, startWork, nextEvent, resetFlow, copy, activity, openTerminal, transition, createIssue, statuses, live } = useStore()
+  const { issues, flows, focusKey, setFocusKey, me, naming, openJira, startWork, nextEvent, resetFlow, copy, activity, openTerminal, transition, createIssue, statuses, live } = useStore()
   const [newSub, setNewSub] = useState('')
 
   // ── Shortcuts (registered before any early return) ──
@@ -33,13 +34,13 @@ export function FocusView() {
   }
   // Live Jira: real work starts in the terminal; typing the command (not
   // simulating it) keeps the user in control of their repository.
-  const startLive = (key: string, summary: string, type: string) => {
-    const session = openTerminal(key)
-    void typeInTerminal(session, `git checkout -b ${branchFor(key, summary, type)}`)
+  const startLive = (is: Issue) => {
+    const session = openTerminal(is.key)
+    void typeInTerminal(session, `git checkout -b ${branchName(naming, is)}`)
   }
   useAction('focus.primary', () => {
     if (!cur || !curFlow) return
-    if (live) startLive(cur.key, cur.security ? '' : cur.summary, cur.type)
+    if (live) startLive(cur)
     else if (!curFlow.started) startWork(cur.key)
     else if (curFlow.pr?.state !== 'merged') nextEvent(cur.key)
   })
@@ -66,7 +67,7 @@ export function FocusView() {
   const acceptance = issue.description.split('\n').map(l => l.match(/^-\s+\[( |x)\]\s+(.*)/)).filter(Boolean) as RegExpMatchArray[]
 
   return (
-    <div className="focus scroll">
+    <div className="focus-view scroll">
       {/* ── Hero ─────────────────────────────────────────── */}
       <section className={cx('hero card', `glow-${statusTone(issue.status)}`)}>
         <div className="hero-top">
@@ -113,7 +114,7 @@ export function FocusView() {
 
           <div className="hero-cta">
             {live ? (
-              <button className="btn primary big" onClick={() => startLive(issue.key, issue.security ? '' : issue.summary, issue.type)}>
+              <button className="btn primary big" onClick={() => startLive(issue)}>
                 {flow.started ? <SquareTerminal size={16} /> : <Play size={16} fill="currentColor" />} {flow.started ? 'Continue in terminal' : 'Start work'}
                 <small>{flow.started ? (flow.live ? 'pull requests on GitHub move the ticket' : 'git push · gh pr create move the ticket') : 'types git checkout -b · Enter moves it to In Progress'}</small>
               </button>
@@ -211,7 +212,7 @@ export function FocusView() {
             <div className="code-empty">
               <GitBranch size={28} />
               <p>Starting work will create</p>
-              <code>{branchFor(issue.key, issue.summary, issue.type)}</code>
+              <code>{branchName(naming, issue)}</code>
             </div>
           )}
 

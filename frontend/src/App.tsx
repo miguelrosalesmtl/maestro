@@ -11,6 +11,7 @@ import { BoardView } from './components/BoardView'
 import { RoadmapView } from './components/RoadmapView'
 import { AutomationsView } from './components/AutomationsView'
 import { FreestyleView } from './components/FreestyleView'
+import { SettingsView } from './components/SettingsView'
 import { JiraIssueView } from './components/JiraIssueView'
 import { CommandPalette } from './components/CommandPalette'
 import { Toasts } from './components/Toasts'
@@ -22,7 +23,7 @@ import { timeAgo } from './lib/util'
 
 if (isMac) document.documentElement.classList.add('mac')
 
-const TITLES: Record<View, string> = { mine: 'My work', focus: 'Focus', board: 'Board', roadmap: 'Roadmap', automations: 'Automations', freestyle: 'Freestyle' }
+const TITLES: Record<View, string> = { mine: 'My work', focus: 'Focus', board: 'Board', roadmap: 'Roadmap', automations: 'Automations', freestyle: 'Freestyle', settings: 'Settings' }
 
 function Shell() {
   const { ready, view, jiraKey, paletteOpen, createDraft, connection } = useStore()
@@ -73,6 +74,9 @@ function Workspace({ help, setHelp, hints, setHints }: {
   useAction('nav.roadmap', () => setView('roadmap'))
   useAction('nav.automations', () => setView('automations'))
   useAction('nav.freestyle', () => setView('freestyle'))
+  useAction('nav.settings', () => setView('settings'))
+  const [freeSeen, setFreeSeen] = useState(false)
+  useEffect(() => { if (view === 'freestyle') setFreeSeen(true) }, [view])
   const [fullscreen, setFullscreen] = useState(false)
   const toggleFullscreen = useCallback(() => {
     const next = !fullscreen
@@ -116,14 +120,16 @@ function Workspace({ help, setHelp, hints, setHints }: {
           <button className="btn ghost no-drag" onClick={() => setHelp(true)}><Keyboard size={13} /> Shortcuts <Combo combo={bindings.help} /></button>
           <button className="btn ghost no-drag" onClick={() => setPaletteOpen(true)}><Command size={13} /> Commands <Combo combo={bindings.palette} /></button>
         </header>
-        <div className="view" key={view}>
+        {view !== 'freestyle' && <div className="view" key={view}>
           {view === 'mine' && <MyWorkView />}
           {view === 'focus' && <FocusView />}
           {view === 'board' && <BoardView />}
           {view === 'roadmap' && <RoadmapView />}
           {view === 'automations' && <AutomationsView />}
-          {view === 'freestyle' && <FreestyleView />}
-        </div>
+          {view === 'settings' && <SettingsView />}
+        </div>}
+        {/* Mounted from the first visit on, so its terminals keep their screens while you are elsewhere. */}
+        {freeSeen && <div className="view" hidden={view !== 'freestyle'}><FreestyleView shown={view === 'freestyle'} /></div>}
         <TerminalDock />
       </div>
       <JiraIssueView />

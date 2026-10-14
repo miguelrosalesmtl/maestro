@@ -98,6 +98,10 @@ func (l *Layers) SetPersonal(p *Config) error {
 	return l.Remerge()
 }
 
+// Base is the configuration without the personal file (defaults ← team), to
+// tell which settings the personal file actually changes.
+func (l *Layers) Base() (*Config, error) { return mergeRaw(l.teamRaw) }
+
 // Remerge recomputes Effective from the layers and re-validates it.
 func (l *Layers) Remerge() error {
 	eff, err := mergeRaw(l.teamRaw, l.personalRaw)

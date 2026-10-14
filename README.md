@@ -115,8 +115,9 @@ Both are remembered.
 | **Terminal dock** | Real shell (PTY) per ticket. `$MAESTRO_TICKET`, `$MAESTRO_BRANCH`, `$MAESTRO_SUMMARY` are set; one-click ticket commands; `git checkout -b`, `git push`, `gh pr create`, `gh pr merge` typed here advance the flow and the Jira status. |
 | **Board** | *Your sprint* (the active sprint of your projects), or any Jira board: **Find board** (`w`) searches every board on the site; pin the ones you follow. A board shows its own Jira columns and any sprint you pick (active, upcoming, recently closed); kanban boards show open work. Drag a card to transition it; `r` reloads, `]` / `[` switch boards. Pins and the last sprint per board are remembered. |
 | **Roadmap** | Initiative → Epic → tickets with rolled-up progress. |
-| **Automations** | Rules: *when* dev event *then* move ticket to status. |
+| **Automations** | Rules: *when* dev event *then* move ticket to status. Each rule can be limited to some projects and issue types (the filter button on the rule); add or delete rules with **+ Rule** and the bin. With live Jira, changes are saved to `config.yaml`. Two enabled rules for the same event and scope are refused. |
 | **Freestyle** | Terminals not linked to a ticket, for investigations. They start in your home folder, get no ticket variables, and never move a ticket. Double-click a tab to rename it; tabs are remembered. |
+| **Settings** | `Ctrl+,` or the gear at the bottom of the left bar. Branch name and pull request templates (with a live preview on your ticket), merge method, terminal shell, environment, startup commands, extra one-click commands, and per-project terminal setup. Only what you change is written to `config.yaml`; the rest keeps coming from the defaults and your team file. `Ctrl+S` saves. (Saving rewrites `config.yaml`, so comments in it are not kept.) |
 | **Jira view** | Any ticket rendered like Jira: description, child issues / sub-tasks, linked issues (add/remove), comments, history. |
 | **Create** | Initiative → Epic → Story/Task/Bug → Sub-task, validated against the hierarchy. From the `+` on any tree row, the Jira view, the palette, or `C`. |
 
@@ -125,6 +126,7 @@ Both are remembered.
 | Keys (Linux; ⌘ on macOS) | |
 |---|---|
 | `Ctrl+1` … `Ctrl+6` | My work, Focus, Board, Roadmap, Automations, Freestyle (works even in the terminal) |
+| `Ctrl+,` | Settings |
 | `F11` | Full screen (or the button in the top bar) |
 | `Ctrl+Shift+M` / double-click the top bar | Maximize / restore |
 | `?` | Every shortcut, rebindable |
@@ -195,7 +197,10 @@ Not yet: managing sprints/versions, velocity and sprint progress, release notes,
 Each ticket can have several terminals (`PLAT-142`, `PLAT-142 #2`, …); all of them carry the
 ticket's env vars and repo folder, and git/gh commands in any of them drive the ticket. The panel
 shows only the selected ticket's terminals; the others keep running behind the "N others" button.
-Selecting a ticket never starts a shell. In the Freestyle view the same keys act on its terminals.
+Selecting a ticket never starts a shell. In the Freestyle view the same keys act on its terminals. Terminals keep running, and keep
+their screen, while you are in another view. If Maestro was started from inside a Claude Code
+session, its terminals do not inherit that session's markers, so Claude Code in them runs as a
+normal session.
 
 | Keys (Linux; ⌘ on macOS) | |
 |---|---|
@@ -212,6 +217,17 @@ has gone quiet (probably waiting for input, e.g. an AI agent's question), green 
 finished. You get a short chirp and a notice when a command finishes after ≥ 10 s or starts
 waiting — unless you are looking at that terminal. Interactive programs (vim, less, ssh, …)
 never notify. Settings: `terminal.notify` in `config.yaml`; mute from the command palette.
+
+**Setup per terminal** (Settings → Terminal, or `terminal:` in `config.yaml`): the shell
+(default: your login shell), environment variables, startup commands typed into every new
+terminal (e.g. `nvm use`), and extra one-click command buttons. Under *By project*, a project's
+ticket terminals get their own variables and startup commands on top. Changes apply to
+terminals opened after saving.
+
+**Branch and PR names** come from `dev.branch` and `dev.pr` (Settings → Branches / Pull
+requests). Placeholders: `{key}` `{project}` `{type}` `{summary}` `{slug}` `{prefix}` `{url}`,
+and `{branch}` in PR text. The branch template must contain `{key}`, so Maestro can match the
+branch to its ticket. A secured issue's title never goes into a branch or pull request.
 
 ### GitHub pull requests
 
@@ -306,6 +322,7 @@ variables → Actions); without them the builds are unsigned:
 
 ```
 main.go, app.go          Wails entry + methods bound to the UI
+settings.go              Settings and automation rules: validate, save only what changed
 internal/tracker         Tracker interface + in-memory mock used by the UI today
 internal/tracker/live    Live Jira tracker: mapping, polling sync, writes, link-direction check
 internal/tracker/jira/jiratest  Fake Jira server for tests (also over HTTPS)

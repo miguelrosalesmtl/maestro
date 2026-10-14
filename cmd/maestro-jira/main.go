@@ -43,7 +43,7 @@ func main() {
 	cmds := map[string]func(context.Context, []string) error{
 		"detect": detect, "login": login, "check": check, "discover": discover, "logout": logout,
 		"github-login": githubLogin,
-		"version": func(context.Context, []string) error { fmt.Println("maestro-jira", setup.Version); return nil },
+		"version":      func(context.Context, []string) error { fmt.Println("maestro-jira", setup.Version); return nil },
 	}
 	run, ok := cmds[os.Args[1]]
 	if !ok {

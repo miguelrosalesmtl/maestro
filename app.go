@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/base64"
 	"log/slog"
+	"maps"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -27,13 +30,16 @@ import (
 // when Maestro is logged in, else the demo mock. Methods that need it call
 // a.tr()/a.fl(), which wait until that choice is made.
 type App struct {
-	ctx   context.Context
-	term  *term.Manager
-	cfg   *config.Config
-	logs  *applog.Logs // nil if the log file could not be opened
-	ui    *applog.Frontend
-	log   *slog.Logger
-	ready chan struct{} // closed once tracker and flow are set
+	ctx  context.Context
+	term *term.Manager
+	// cfg is the effective configuration; Settings can replace it (read it with conf()).
+	cfgMu  sync.RWMutex
+	cfg    *config.Config
+	layers *config.Layers // personal + team files; nil when config.yaml could not be read
+	logs   *applog.Logs   // nil if the log file could not be opened
+	ui     *applog.Frontend
+	log    *slog.Logger
+	ready  chan struct{} // closed once tracker and flow are set
 
 	mu      sync.RWMutex
 	tracker tracker.Tracker
@@ -47,8 +53,8 @@ type App struct {
 func NewApp(cfg *config.Config, logs *applog.Logs) *App {
 	a := &App{cfg: cfg, logs: logs, ui: applog.NewFrontend(), log: slog.Default().With("component", "app"), ready: make(chan struct{})}
 	a.term = term.NewManager(term.Hooks{
-		OnData: func(key string, data []byte) {
-			wruntime.EventsEmit(a.ctx, "term:data", key, base64.StdEncoding.EncodeToString(data))
+		OnData: func(key string, data []byte, end int64) {
+			wruntime.EventsEmit(a.ctx, "term:data", key, base64.StdEncoding.EncodeToString(data), end)
 		},
 		OnExit:     func(key string) { wruntime.EventsEmit(a.ctx, "term:exit", key) },
 		OnActivity: func(ev term.Activity) { a.onTermActivity(ev) },
@@ -63,7 +69,7 @@ func NewApp(cfg *config.Config, logs *applog.Logs) *App {
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
-	if n := a.cfg.Terminal.Notify; n.IsEnabled() {
+	if n := a.conf().Terminal.Notify; n.IsEnabled() {
 		o := term.DefaultNotifyOptions()
 		o.MinRun = time.Duration(n.MinSeconds) * time.Second
 		o.WaitFor = time.Duration(max(2, n.WaitSeconds)) * time.Second
@@ -85,6 +91,12 @@ func (a *App) shutdown(ctx context.Context) {
 	if lt != nil {
 		lt.Stop()
 	}
+}
+
+func (a *App) conf() *config.Config {
+	a.cfgMu.RLock()
+	defer a.cfgMu.RUnlock()
+	return a.cfg
 }
 
 // tr and fl wait for startup to pick the tracker (bounded by connect's timeout).
@@ -133,6 +145,10 @@ type Snapshot struct {
 	CreateDefaults tracker.CreateDefaults           `json:"createDefaults"`
 	TimeTracking   bool                             `json:"timeTracking"`
 	CustomColumns  []tracker.CustomColumn           `json:"customColumns"`
+
+	// Naming builds branch names and pull request text (Settings).
+	Naming   flow.Naming           `json:"naming"`
+	Commands []config.QuickCommand `json:"commands"` // extra one-click terminal commands
 }
 
 func (a *App) Snapshot() Snapshot {
@@ -151,6 +167,7 @@ func (a *App) Snapshot() Snapshot {
 		LinkTypes: orEmptyMap(m.LinkTypes), Projects: orEmpty(m.Projects), Live: m.Live,
 		Sprints: orEmpty(m.Sprints), Versions: orEmptyMap(m.Versions), CreateDefaults: m.CreateDefaults, TimeTracking: m.TimeTracking,
 		CustomColumns: orEmpty(m.CustomColumns),
+		Naming:        fl.Naming(), Commands: orEmpty(a.conf().Terminal.Commands),
 	}
 }
 
@@ -251,8 +268,6 @@ func (a *App) StartWork(key string) (flow.StepResult, error)         { return a.
 func (a *App) SimulateNextEvent(key string) (flow.StepResult, error) { return a.fl().Advance(key) }
 func (a *App) ResetFlow(key string) (flow.StepResult, error)         { return a.fl().Reset(key) }
 func (a *App) GetActivity() []flow.Event                             { return a.fl().Activity(50) }
-func (a *App) ToggleRule(id string) []flow.Rule                      { return a.fl().ToggleRule(id) }
-func (a *App) SetRuleStatus(id, status string) []flow.Rule           { return a.fl().SetRuleStatus(id, status) }
 
 // OpenURL opens a link in the system browser.
 func (a *App) OpenURL(url string) {
@@ -271,8 +286,10 @@ func (a *App) CopyToClipboard(text string) bool {
 // session is the ticket key, or "KEY#n" for extra terminals on the same ticket.
 func (a *App) TermOpen(session string, cols, rows int) (bool, error) {
 	if term.IsFreestyle(session) {
-		// Not linked to a ticket: home folder, no ticket context.
-		created, err := a.term.Open(term.Context{Session: session}, uint16(cols), uint16(rows))
+		// Not linked to a ticket: home folder, no ticket context, only the global terminal setup.
+		c := a.termSetup("")
+		c.Session = session
+		created, err := a.term.Open(c, uint16(cols), uint16(rows))
 		return created, a.fail("open freestyle terminal", err, "session", session)
 	}
 	key := term.SessionTicket(session)
@@ -283,14 +300,55 @@ func (a *App) TermOpen(session string, cols, rows int) (bool, error) {
 	f := a.fl().Flow(key)
 	branch := f.Branch
 	if branch == "" {
-		branch = flow.BranchName(is)
+		branch = a.fl().BranchFor(is)
 	}
 	summary := is.Summary
 	if is.Security != "" {
 		summary = "" // a secured issue's content stays out of the shell and agents
 	}
-	created, err := a.term.Open(term.Context{Key: key, Session: session, Summary: summary, Branch: branch, Dir: a.repoDir(key)}, uint16(cols), uint16(rows))
+	c := a.termSetup(flow.Project(key))
+	c.Key, c.Session, c.Summary, c.Branch, c.Dir = key, session, summary, branch, a.repoDir(key)
+	created, err := a.term.Open(c, uint16(cols), uint16(rows))
 	return created, a.fail("open terminal", err, "key", key)
+}
+
+// termSetup is the configured shell, environment and startup commands for a
+// new terminal: global ones, then the project's (project "" = freestyle).
+func (a *App) termSetup(project string) term.Context {
+	t := a.conf().Terminal
+	c := term.Context{Startup: append([]string{}, t.Startup...)}
+	if t.Shell != "" {
+		sh := config.ExpandHome(t.Shell)
+		if p, err := exec.LookPath(sh); err == nil {
+			c.Shell = p
+		} else {
+			a.log.Warn("terminal.shell not found; using $SHELL", "shell", t.Shell)
+		}
+	}
+	env := maps.Clone(t.Env)
+	if pt, ok := t.Projects[project]; ok && project != "" {
+		if env == nil {
+			env = map[string]string{}
+		}
+		maps.Copy(env, pt.Env)
+		c.Startup = append(c.Startup, pt.Startup...)
+	}
+	for _, k := range slices.Sorted(maps.Keys(env)) {
+		c.Env = append(c.Env, k+"="+env[k])
+	}
+	return c
+}
+
+// TermHistory is a terminal's recent output (base64) and the output length it
+// ends at, to refill a view that was recreated while the shell kept running.
+type TermHistory struct {
+	Data string `json:"data"`
+	End  int64  `json:"end"`
+}
+
+func (a *App) TermHistory(session string) TermHistory {
+	data, end, _ := a.term.History(session)
+	return TermHistory{Data: base64.StdEncoding.EncodeToString(data), End: end}
 }
 
 func (a *App) TermWrite(key, data string) error      { return a.term.Write(key, data) }
@@ -361,7 +419,7 @@ func (a *App) repoDir(key string) string {
 	if i := strings.LastIndex(key, "-"); i > 0 {
 		project = key[:i]
 	}
-	for _, p := range a.cfg.Projects {
+	for _, p := range a.conf().Projects {
 		if p.Key == project && len(p.Repos) > 0 && p.Repos[0].Path != "" {
 			dir := config.ExpandHome(p.Repos[0].Path)
 			if st, err := os.Stat(dir); err == nil && st.IsDir() {
@@ -388,5 +446,5 @@ func (a *App) onTermActivity(ev term.Activity) {
 	case ev.State == term.Waiting:
 		a.log.Info("terminal waiting for input", "session", ev.Session, "command", ev.Command)
 	}
-	a.emit("term:activity", TermActivity{Activity: ev, Sound: a.cfg.Terminal.Notify.HasSound()})
+	a.emit("term:activity", TermActivity{Activity: ev, Sound: a.conf().Terminal.Notify.HasSound()})
 }

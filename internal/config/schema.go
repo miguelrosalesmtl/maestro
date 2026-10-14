@@ -336,9 +336,19 @@ type RollUp struct {
 type Terminal struct {
 	Shell    string            `yaml:"shell,omitempty"`    // TRM-01
 	Env      map[string]string `yaml:"env,omitempty"`      // TRM-03
+	Startup  []string          `yaml:"startup,omitempty"`  // commands run when a terminal opens
 	Commands []QuickCommand    `yaml:"commands,omitempty"` // TRM-04
 	Watch    []string          `yaml:"watch,omitempty"`    // TRM-05
 	Notify   TerminalNotify    `yaml:"notify,omitempty"`
+	// Projects adds env and startup commands for one project's ticket terminals
+	// (a map, so the team and personal files merge per project).
+	Projects map[string]ProjectTerminal `yaml:"projects,omitempty"`
+}
+
+// ProjectTerminal is the extra setup for one project's ticket terminals.
+type ProjectTerminal struct {
+	Env     map[string]string `yaml:"env,omitempty" json:"env"`
+	Startup []string          `yaml:"startup,omitempty" json:"startup"`
 }
 
 // TerminalNotify controls the activity light and chirp for ticket terminals.
@@ -354,8 +364,8 @@ func (n TerminalNotify) IsEnabled() bool { return n.Enabled == nil || *n.Enabled
 func (n TerminalNotify) HasSound() bool  { return n.Sound == nil || *n.Sound }
 
 type QuickCommand struct {
-	Label   string `yaml:"label"`
-	Command string `yaml:"command"`
+	Label   string `yaml:"label" json:"label"`
+	Command string `yaml:"command" json:"command"`
 }
 
 type Agent struct {

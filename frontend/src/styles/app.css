@@ -278,7 +278,8 @@ html.mac .sidebar-head { padding-top: 30px; }
 .empty { display: grid; place-items: center; height: 100%; color: var(--text-3); }
 
 /* ───────────────────────── Focus ───────────────────────── */
-.focus { height: 100%; padding: 22px 26px 40px; display: flex; flex-direction: column; gap: 18px; }
+/* Not ".focus": xterm puts that class on a focused terminal. */
+.focus-view { height: 100%; padding: 22px 26px 40px; display: flex; flex-direction: column; gap: 18px; }
 .hero { position: relative; overflow: hidden; padding: 20px 24px 24px; }
 .hero::before {
   content: ''; position: absolute; inset: 0; pointer-events: none;
@@ -570,7 +571,7 @@ html.mac .sidebar-head { padding-top: 30px; }
 .md code { font: 12px var(--mono); padding: 1px 5px; border-radius: 4px; background: rgba(255,255,255,.08); }
 
 /* ───────────────────────── Layout fixes ───────────────────────── */
-.focus > *, .roadmap > *, .automations > * { flex-shrink: 0; }
+.focus-view > *, .roadmap > *, .automations > * { flex-shrink: 0; }
 body.resizing { cursor: ns-resize; }
 body.resizing-x { cursor: ew-resize; user-select: none; }
 body.resizing-x * { pointer-events: none; }
@@ -994,3 +995,74 @@ dd:hover .edit-pen, .editable:focus-within .edit-pen { opacity: 1; }
 .refresh-btn { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-left: 2px; border-radius: 5px; color: var(--text-3); }
 .refresh-btn:hover { color: var(--text); background: var(--surface-2); }
 .refresh-btn.busy svg { animation: spin 1s linear infinite; }
+
+/* ── Automations: rule scope, add rule ───────────────────────── */
+.rule-actions { display: flex; align-items: center; gap: 10px; justify-self: end; }
+.scope-btn {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 230px; padding: 4px 10px; border-radius: 999px;
+  font-size: 11.5px; color: var(--text-3); border: 1px dashed var(--border-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.scope-btn:hover { color: var(--text-2); background: var(--surface-2); }
+.scope-btn.on { color: var(--text); border-style: solid; border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.rule-scope { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--border); }
+.rule-scope > div { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.rule-scope .rule-tag { width: 64px; }
+.scope-chip { padding: 3px 10px; border-radius: 999px; font-size: 12px; color: var(--text-2); background: var(--surface); border: 1px solid var(--border); }
+.scope-chip:hover { background: var(--surface-2); color: var(--text); }
+.scope-chip.on { color: white; background: color-mix(in srgb, var(--accent) 70%, transparent); border-color: transparent; }
+.rule-new { border-style: dashed; }
+
+/* ── Settings ────────────────────────────────────────────────── */
+.settings { height: 100%; padding: 22px 26px 60px; display: flex; flex-direction: column; gap: 18px; }
+.settings .view-head { position: sticky; top: -22px; z-index: 2; margin: -22px -26px 0; padding: 22px 26px 14px; background: var(--bg); gap: 16px; }
+.settings .view-head code { font-family: var(--mono); font-size: 12px; color: var(--text-2); }
+.settings-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.settings-actions .btn:disabled { opacity: .55; cursor: default; transform: none; box-shadow: none; }
+.settings-section { display: flex; flex-direction: column; gap: 14px; max-width: 920px; }
+.settings-section .card-head { flex-wrap: wrap; margin-bottom: 2px; }
+.settings-problems { display: flex; gap: 12px; max-width: 920px; border-color: color-mix(in srgb, var(--red) 45%, transparent); background: color-mix(in srgb, var(--red) 8%, transparent); }
+.settings-problems > svg { color: var(--red); flex-shrink: 0; margin-top: 2px; }
+.settings-problems ul { margin: 6px 0 0; padding-left: 18px; }
+.settings-problems code { font-family: var(--mono); font-size: 11.5px; color: var(--text-2); margin-right: 4px; }
+
+.field-row { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 16px; align-items: start; }
+.field-label { padding-top: 7px; font-size: 12.5px; font-weight: 600; color: var(--text-2); }
+.field-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.field-body > input, .field-body > textarea, .pair-row input, .prefix-grid input {
+  width: 100%; padding: 7px 10px; border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--border); outline: none;
+}
+.field-body > textarea { resize: vertical; line-height: 1.5; }
+.field-body > input:focus, .field-body > textarea:focus, .pair-row input:focus, .prefix-grid input:focus { border-color: color-mix(in srgb, var(--accent) 60%, transparent); background: var(--surface-2); }
+.field-body > input.narrow { width: 90px; }
+.field-row.bad .field-body > input, .field-row.bad .field-body > textarea { border-color: color-mix(in srgb, var(--red) 60%, transparent); }
+.field-problem { color: var(--red); font-size: 12px; }
+.field-hint { line-height: 1.45; }
+.field-body .seg { margin: 0; align-self: flex-start; }
+.field-body .seg button { flex: none; padding: 6px 16px; }
+
+.prefix-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; }
+.prefix-grid label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--text-3); text-transform: capitalize; }
+.pair-rows { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.pair-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto; gap: 6px; align-items: center; width: 100%; }
+
+.placeholders { display: flex; flex-wrap: wrap; gap: 6px 14px; padding-top: 10px; border-top: 1px solid var(--border); }
+.placeholders code { font-family: var(--mono); color: var(--accent-2); }
+.naming-preview { padding: 12px 14px; border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--border); }
+.naming-preview dl, .conn-list { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 6px 14px; margin: 8px 0 0; }
+.naming-preview dt, .conn-list dt { color: var(--text-3); font-size: 12px; }
+.naming-preview dd, .conn-list dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.naming-preview dd.pre { white-space: pre-wrap; }
+.project-term { border-top: 1px solid var(--border); padding: 10px 0 4px; }
+.project-term summary { cursor: pointer; display: flex; gap: 10px; align-items: baseline; padding-bottom: 6px; }
+.project-term[open] summary { padding-bottom: 12px; }
+.project-term .field-row { margin-bottom: 10px; }
+.cmd-list { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid var(--border); }
+.cmd-list div { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 14px; }
+.cmd-list .muted { font-family: inherit; }
+
+@media (max-width: 760px) {
+  .field-row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .field-label { padding-top: 0; }
+  .naming-preview dl, .conn-list, .cmd-list div { grid-template-columns: minmax(0, 1fr); }
+  .rule { grid-template-columns: minmax(0, 1fr); }
+}

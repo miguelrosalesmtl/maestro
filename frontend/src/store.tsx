@@ -2,8 +2,9 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { api } from './api'
 import { EventsOn } from '../wailsjs/runtime/runtime'
 import { reportError } from './lib/errors'
-import type { Connection, FreeSession, GitHubStatus, CreateDefaults, CustomColumn, FieldPatch, SprintInfo, TermActivity, TermLightState, VersionInfo, Flow, FlowEvent, Issue, IssueType, NewIssue, Rule, StepResult, User, View } from './types'
+import type { Connection, FreeSession, GitHubStatus, CreateDefaults, CustomColumn, FieldPatch, SprintInfo, TermActivity, TermLightState, VersionInfo, Flow, FlowEvent, Issue, IssueType, Naming, NewIssue, QuickCommand, Rule, Settings, StepResult, User, View } from './types'
 import { isWork, setStatusStates } from './lib/util'
+import { defaultNaming } from './lib/naming'
 import { chirp, loadMuted, saveMuted } from './lib/chirp'
 import { WindowSetTitle } from '../wailsjs/runtime/runtime'
 
@@ -70,8 +71,14 @@ interface Store {
   createIssue: (input: NewIssue) => Promise<Issue | null>
   link: (from: string, type: string, to: string) => Promise<void>
   unlink: (from: string, type: string, to: string) => Promise<void>
-  toggleRule: (id: string) => Promise<void>
-  setRuleStatus: (id: string, status: string) => Promise<void>
+  /** Replaces every automation rule (saved to config.yaml with live Jira). False if refused. */
+  saveRules: (rules: Rule[]) => Promise<boolean>
+  toggleRule: (id: string) => Promise<boolean>
+  setRuleStatus: (id: string, status: string) => Promise<boolean>
+  /** Branch / pull request naming and extra terminal commands (Settings). */
+  naming: Naming
+  commands: QuickCommand[]
+  applySettings: (s: Settings) => void
   copy: (text: string, label?: string) => void
   dismissToast: (id: string) => void
   /** Shows a short notice (bottom right). */
@@ -112,6 +119,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [flows, setFlows] = useState<Record<string, Flow>>({})
   const [statuses, setStatuses] = useState<string[]>([])
   const [rules, setRules] = useState<Rule[]>([])
+  const rulesRef = useRef(rules)
+  rulesRef.current = rules
+  const [naming, setNaming] = useState<Naming>(defaultNaming)
+  const [commands, setCommands] = useState<QuickCommand[]>([])
   const [activity, setActivity] = useState<FlowEvent[]>([])
   const [toasts, setToasts] = useState<Toast[]>([])
   const [users, setUsers] = useState<User[]>([])
@@ -169,6 +180,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (s.createDefaults) setCreateDefaults(s.createDefaults)
       setTimeTracking(!!s.timeTracking)
       setCustomColumns(s.customColumns ?? [])
+      if (s.naming) setNaming(s.naming)
+      setCommands(s.commands ?? [])
       setLive(!!s.live)
       // Focus a ticket that exists: the deep link, else my first open work item.
       setFocusKey(k => {
@@ -283,6 +296,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, [pushToast])
 
+  // Optimistic: the switch moves at once, and comes back if the rules are refused.
+  const saveRules = useCallback(async (next: Rule[]) => {
+    const prev = rulesRef.current
+    setRules(next)
+    try {
+      setRules(await api.saveRules(next))
+      return true
+    } catch (err) {
+      setRules(prev)
+      pushToast({ tone: 'error', title: 'Rules not saved', detail: String(err).replace(/^Error: /, '') })
+      return false
+    }
+  }, [pushToast])
+
   const value = useMemo<Store>(() => ({
     ready, me, issues, flows, statuses, rules, activity, toasts, users, sprint, childTypes, linkTypes,
     view, setView, focusKey, setFocusKey,
@@ -385,11 +412,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     link: guard(async (from, type, to) => { putIssues(await api.link(from, type, to)); setActivity(await api.activity()) }),
     unlink: guard(async (from, type, to) => putIssues(await api.unlink(from, type, to))),
-    toggleRule: guard(async id => setRules(await api.toggleRule(id))),
-    setRuleStatus: guard(async (id, status) => setRules(await api.setRuleStatus(id, status))),
+    saveRules, naming, commands,
+    toggleRule: id => saveRules(rulesRef.current.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r)),
+    setRuleStatus: (id, status) => saveRules(rulesRef.current.map(r => r.id === id ? { ...r, toStatus: status } : r)),
+    applySettings: st => { setNaming(st.naming); setCommands(st.terminal.commands ?? []) },
     copy: (text, label) => { api.copy(text); pushToast({ tone: 'dev', title: 'Copied to clipboard', detail: label ?? text }) },
     dismissToast: id => setToasts(ts => ts.filter(t => t.id !== id)),
-  }), [ready, me, issues, flows, statuses, rules, activity, toasts, users, sprint, childTypes, linkTypes, createDraft, connection, github, live, projects, sprints, versions, createDefaults, timeTracking, customColumns, view, focusKey, jiraKey, paletteOpen, termOpen, termSessions, activeSession, termActivity, chirpMuted, freeSessions, activeFree, setFreeSessions, guard, applyStep, pushToast])
+  }), [ready, me, issues, flows, statuses, rules, activity, toasts, users, sprint, childTypes, linkTypes, createDraft, connection, github, live, projects, sprints, versions, createDefaults, timeTracking, customColumns, view, focusKey, jiraKey, paletteOpen, termOpen, termSessions, activeSession, termActivity, chirpMuted, freeSessions, activeFree, setFreeSessions, guard, applyStep, pushToast, saveRules, naming, commands])
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

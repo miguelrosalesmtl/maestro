@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import { ChevronRight, Columns3, Crosshair, Flag, GitPullRequest, RefreshCw, SquareDashedBottomCode, Inbox, Keyboard, Layers, Lock, Plus, Search, Zap } from 'lucide-react'
+import { ChevronRight, Columns3, Crosshair, Flag, GitPullRequest, RefreshCw, SquareDashedBottomCode, Inbox, Keyboard, Layers, Lock, Plus, Search, Settings as SettingsIcon, Zap } from 'lucide-react'
 import { combosOf, compactCombo, formatCombo, useAction, useKeys } from '../keys'
 import { api } from '../api'
 import { useStore } from '../store'
@@ -44,6 +44,11 @@ export function Rail() {
         })}
       </div>
       <div className="rail-bottom">
+        <button className={cx('rail-btn', view === 'settings' && 'active')} data-tip={`Settings  ·  ${keysOf('nav.settings')}`} aria-label="Settings"
+          onClick={() => setView('settings')}>
+          <SettingsIcon size={19} />
+          <span className="rail-label">Settings</span>
+        </button>
         <button className="rail-btn" data-tip={`Keyboard shortcuts  ·  ${keyOf('help')}`} aria-label="Keyboard shortcuts"
           onClick={() => window.dispatchEvent(new Event('maestro:open-help'))}>
           <Keyboard size={19} />

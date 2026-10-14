@@ -215,6 +215,39 @@ export interface Rule {
   label: string
   toStatus: string
   enabled: boolean
+  /** Limits the rule; empty = all projects / all issue types. */
+  projects: string[]
+  issueTypes: string[]
+}
+
+/** Branch and pull request naming (config dev.branch, dev.pr). */
+export interface Naming {
+  branchTemplate: string
+  prefix: Record<string, string> // issue type → prefix; "default" for the rest
+  slugWords: number
+  prTitle: string
+  prBody: string
+  mergeMethod: string // merge | squash | rebase
+}
+
+export interface QuickCommand { label: string; command: string }
+export interface ProjectTerminal { env: Record<string, string>; startup: string[] }
+
+/** What the Settings view edits (backend settings.go). */
+export interface Settings {
+  naming: Naming
+  terminal: {
+    shell: string
+    env: Record<string, string>
+    startup: string[]
+    commands: QuickCommand[]
+    projects: Record<string, ProjectTerminal>
+  }
+  path: string
+  teamPath: string
+  writable: boolean
+  saved: boolean
+  problems: { path: string; message: string }[]
 }
 
 export interface StepResult {
@@ -242,6 +275,8 @@ export interface Snapshot {
   createDefaults: CreateDefaults
   timeTracking: boolean
   customColumns: CustomColumn[]
+  naming: Naming
+  commands: QuickCommand[]
 }
 
 /** Where the data comes from (backend connect.go). */
@@ -277,7 +312,7 @@ export interface TermLightState {
   seconds?: number
 }
 
-export type View = 'mine' | 'focus' | 'board' | 'roadmap' | 'automations' | 'freestyle'
+export type View = 'mine' | 'focus' | 'board' | 'roadmap' | 'automations' | 'freestyle' | 'settings'
 
 /** A terminal that belongs to no ticket (Freestyle view). id is "free:N". */
 export interface FreeSession {
