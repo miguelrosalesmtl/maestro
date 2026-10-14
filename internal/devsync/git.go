@@ -62,8 +62,8 @@ func (w *Watcher) baseRef(ctx context.Context, dir, base string) string {
 }
 
 // scanLocal finds local branches that name a ticket and their commits that
-// are not on the base branch.
-func (w *Watcher) scanLocal(ctx context.Context, dir, base string) (map[string]localWork, error) {
+// are not on the base branch. Every key a branch names goes into mentioned.
+func (w *Watcher) scanLocal(ctx context.Context, dir, base string, mentioned map[string]bool) (map[string]localWork, error) {
 	out, err := w.git(ctx, dir, "for-each-ref", "--sort=-committerdate", "--format=%(refname:short)%09%(committerdate:iso-strict)", "refs/heads")
 	if err != nil {
 		return nil, err
@@ -75,6 +75,9 @@ func (w *Watcher) scanLocal(ctx context.Context, dir, base string) (map[string]l
 		branch, at, _ := strings.Cut(line, "\t")
 		if branch == "" || branch == baseName {
 			continue
+		}
+		for _, key := range w.mentions(branch) {
+			mentioned[key] = true
 		}
 		for _, key := range w.keysIn(branch) {
 			if _, seen := found[key]; seen {

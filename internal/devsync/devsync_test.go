@@ -131,3 +131,43 @@ func TestBadTokenKeepsLocalWork(t *testing.T) {
 		t.Fatalf("status %+v, applied %v", st, keys)
 	}
 }
+
+// Regression (issue #4): a ticket that joins the synced set after the first
+// look (reassigned, edited back into the window) had its old merged PR
+// replayed as new: "branch created" then "PR merged" fired back to back.
+func TestTicketJoiningLaterIsABaseline(t *testing.T) {
+	gh := ghtest.New(t)
+	gh.Update("acme/app", 5, func(p *ghtest.PR) {
+		p.Title, p.Head, p.State, p.MergedAt = "Old work", "feature/PLAT-9-old", "closed", "2026-01-02T00:00:00Z"
+	})
+	known := map[string]bool{"PLAT-1": true}
+	got := map[string]applied{}
+	client, _ := github.New(github.Options{APIURL: gh.URL, Tokens: github.Static(ghtest.Token)})
+	w, _ := New(Options{Client: client, Repos: []Repo{{Name: "acme/app"}}, Known: func(k string) bool { return known[k] },
+		Apply: func(k string, ds flow.DevState, fire bool) { got[k] = applied{ds, fire} }})
+	ctx := context.Background()
+	w.Sync(ctx)
+	if _, ok := got["PLAT-9"]; ok {
+		t.Fatal("PLAT-9 is not synced yet")
+	}
+
+	known["PLAT-9"] = true // enters the synced set
+	w.Sync(ctx)
+	if p9, ok := got["PLAT-9"]; !ok || p9.fire || p9.ds.PR == nil {
+		t.Fatalf("PLAT-9 first look must be shown and not fire: %+v", p9)
+	}
+
+	// New work for a synced ticket after that is news and fires, and the
+	// user's own pull request is marked as theirs.
+	gh.Update("acme/app", 7, func(p *ghtest.PR) { p.Title, p.Head = "Start", "feature/PLAT-1-new" })
+	w.Sync(ctx)
+	if p1 := got["PLAT-1"]; !p1.fire || p1.ds.PR == nil || p1.ds.PR.Number != 7 || !p1.ds.Mine {
+		t.Fatalf("PLAT-1: %+v", p1)
+	}
+	gh.Update("acme/app", 7, func(p *ghtest.PR) { p.State = "closed" })
+	gh.Update("acme/app", 8, func(p *ghtest.PR) { p.Title, p.Head, p.Author = "Takeover", "fix/PLAT-1-other", "teammate" })
+	w.Sync(ctx)
+	if p1 := got["PLAT-1"]; p1.ds.PR == nil || p1.ds.PR.Number != 8 || p1.ds.Mine {
+		t.Fatalf("a teammate's PR is not the user's: %+v", p1)
+	}
+}

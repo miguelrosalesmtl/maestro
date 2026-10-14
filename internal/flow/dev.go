@@ -13,6 +13,10 @@ type DevState struct {
 	Branch  string       // PR head branch, else a local branch with the key
 	Commits []Commit     // PR commits, else local commits not on the base branch
 	PR      *PullRequest // nil when there is no pull request
+	// Mine is true for the user's own work: a local branch without a pull
+	// request, or a pull request the user opened. Others' work fires no rules
+	// unless automation.anyAuthor is set.
+	Mine bool
 }
 
 // ciState sums up the checks that count: the required ones when any are
@@ -198,7 +202,7 @@ func (e *Engine) ApplyDev(key string, ds DevState, fire bool) (res StepResult, c
 
 	if before.Branch == "" && ds.Branch != "" {
 		evs = append(evs, e.emit(key, "dev", "Branch created", ds.Branch, ""))
-		evs = append(evs, e.fire(key, TriggerBranchCreated)...)
+		evs = append(evs, e.fire(key, TriggerBranchCreated, ds.Mine)...)
 	}
 	if n, m := len(before.Commits), len(f.Commits); m > n {
 		last := f.Commits[len(f.Commits)-1]
@@ -214,13 +218,13 @@ func (e *Engine) ApplyDev(key string, ds DevState, fire bool) (res StepResult, c
 				title = fmt.Sprintf("PR #%d ready for review", pr.Number)
 			}
 			evs = append(evs, e.emit(key, "dev", title, pr.Title, ""))
-			evs = append(evs, e.fire(key, TriggerPROpened)...)
+			evs = append(evs, e.fire(key, TriggerPROpened, ds.Mine)...)
 		}
 		if ci := stage(f, "ci"); ci != stage(&beforeFlow, "ci") && pr.State == "open" {
 			switch ci {
 			case StateFailed:
 				evs = append(evs, e.emit(key, "dev", "Checks failed", f.stage("ci").Detail, ""))
-				evs = append(evs, e.fire(key, TriggerCIFailed)...)
+				evs = append(evs, e.fire(key, TriggerCIFailed, ds.Mine)...)
 			case StateDone:
 				if samePR {
 					evs = append(evs, e.emit(key, "dev", "Checks passed", f.stage("ci").Detail, ""))
@@ -231,15 +235,15 @@ func (e *Engine) ApplyDev(key string, ds DevState, fire bool) (res StepResult, c
 			switch rv {
 			case StateFailed:
 				evs = append(evs, e.emit(key, "dev", "Changes requested", strings.Join(pr.ChangesRequested, ", "), ""))
-				evs = append(evs, e.fire(key, TriggerChangesRequested)...)
+				evs = append(evs, e.fire(key, TriggerChangesRequested, ds.Mine)...)
 			case StateDone:
 				evs = append(evs, e.emit(key, "dev", fmt.Sprintf("PR #%d approved", pr.Number), strings.Join(pr.ApprovedBy, ", ")+" approved", ""))
-				evs = append(evs, e.fire(key, TriggerReviewApproved)...)
+				evs = append(evs, e.fire(key, TriggerReviewApproved, ds.Mine)...)
 			}
 		}
 		if pr.State == "merged" && !(samePR && prevPR.State == "merged") {
 			evs = append(evs, e.emit(key, "dev", fmt.Sprintf("PR #%d merged", pr.Number), "merged into "+firstNonEmpty(pr.Base, "base branch"), ""))
-			evs = append(evs, e.fire(key, TriggerPRMerged)...)
+			evs = append(evs, e.fire(key, TriggerPRMerged, ds.Mine)...)
 		}
 		if pr.State == "closed" && !(samePR && prevPR.State == "closed") {
 			evs = append(evs, e.emit(key, "dev", fmt.Sprintf("PR #%d closed", pr.Number), "closed without merging", ""))

@@ -5,7 +5,9 @@
 // Polling is repo-centric: one PR listing per repository and interval (with
 // ETags, so an unchanged list costs no rate limit), then details only for
 // the PRs that name a ticket Maestro knows. The first look is a baseline: it
-// is shown but fires no automation.
+// is shown but fires no automation. The same holds per ticket: a ticket that
+// enters the synced set later (reassigned, edited back into the window) has
+// its existing branch and PR shown, not replayed as new events.
 package devsync
 
 import (
@@ -72,8 +74,12 @@ type Watcher struct {
 	closedPR map[string]prDetail             // repo#number → details of a closed PR (they do not change)
 	lastPR   map[string]*flow.PullRequest    // key → last PR shown, kept when it leaves the listing
 	applied  map[string]bool                 // keys with a state shown
-	burst    time.Time
-	ran      bool // one Sync done: later changes fire automation
+	// mentioned: every key named by a listed PR or local branch at the last
+	// Sync, known to the tracker or not. Work already there for a key that
+	// had no state shown yet is a baseline, not news.
+	mentioned map[string]bool
+	burst     time.Time
+	ran       bool // one Sync done: later changes fire automation
 
 	syncMu sync.Mutex // one Sync at a time
 
@@ -107,7 +113,7 @@ func New(o Options) (*Watcher, error) {
 	}
 	w := &Watcher{o: o, log: o.Logger, keyRe: re, git: o.git, pokeCh: make(chan struct{}, 1),
 		lists: map[string][]github.PullRequest{}, listed: map[string]bool{}, closedPR: map[string]prDetail{},
-		lastPR: map[string]*flow.PullRequest{}, applied: map[string]bool{}}
+		lastPR: map[string]*flow.PullRequest{}, applied: map[string]bool{}, mentioned: map[string]bool{}}
 	if w.log == nil {
 		w.log = slog.Default()
 	}
@@ -204,8 +210,19 @@ func (w *Watcher) Poke() {
 // keysIn returns the known ticket keys named in s, in order, without repeats.
 func (w *Watcher) keysIn(s string) []string {
 	var out []string
+	for _, k := range w.mentions(s) {
+		if w.o.Known(k) {
+			out = append(out, k)
+		}
+	}
+	return out
+}
+
+// mentions is every ticket key in s, known to the tracker or not.
+func (w *Watcher) mentions(s string) []string {
+	var out []string
 	for _, k := range w.keyRe.FindAllString(strings.ToUpper(s), -1) {
-		if !slices.Contains(out, k) && w.o.Known(k) {
+		if !slices.Contains(out, k) {
 			out = append(out, k)
 		}
 	}
@@ -270,12 +287,18 @@ func (w *Watcher) Sync(ctx context.Context) {
 	}
 
 	prs := map[string][]candidate{}
+	mentioned := map[string]bool{}
 	for _, r := range w.o.Repos {
 		listed, err := w.listRepo(ctx, r)
 		if err != nil {
 			errs = append(errs, r.Name+": "+short(err))
 		}
 		for _, pr := range listed {
+			for _, s := range []string{pr.Head.Ref, pr.Title, pr.Body} {
+				for _, k := range w.mentions(s) {
+					mentioned[k] = true
+				}
+			}
 			for _, k := range w.prKeys(pr) {
 				prs[k] = append(prs[k], candidate{r, pr})
 			}
@@ -288,7 +311,7 @@ func (w *Watcher) Sync(ctx context.Context) {
 		if r.Path == "" {
 			continue
 		}
-		found, err := w.scanLocal(ctx, r.Path, r.Base)
+		found, err := w.scanLocal(ctx, r.Path, r.Base, mentioned)
 		if err != nil {
 			w.log.Debug("local scan failed", "repo", r.Name, "err", err.Error())
 			continue
@@ -316,6 +339,9 @@ func (w *Watcher) Sync(ctx context.Context) {
 	}
 	w.mu.Unlock()
 
+	w.mu.Lock()
+	me := w.status.User
+	w.mu.Unlock()
 	linked := 0
 	for k := range keys {
 		if ctx.Err() != nil {
@@ -334,6 +360,7 @@ func (w *Watcher) Sync(ctx context.Context) {
 				continue // keep what is shown; try again next time
 			}
 			ds.Repo, ds.Branch, ds.PR, ds.Commits = c.repo.Name, pr.Head, &pr, commits
+			ds.Mine = me != "" && strings.EqualFold(pr.Author, me)
 			w.mu.Lock()
 			repoFires = repoFires && w.listed[c.repo.Name]
 			w.lastPR[k] = &pr
@@ -346,6 +373,7 @@ func (w *Watcher) Sync(ctx context.Context) {
 				// The PR left the listing (an old merged PR): keep showing it.
 				pr := *last
 				ds.Repo, ds.Branch, ds.PR = pr.Repo, pr.Head, &pr
+				ds.Mine = me != "" && strings.EqualFold(pr.Author, me)
 			}
 		}
 		if lw, ok := local[k]; ok {
@@ -354,6 +382,9 @@ func (w *Watcher) Sync(ctx context.Context) {
 			}
 			if ds.Repo == "" {
 				ds.Repo = localRepo[k]
+			}
+			if ds.PR == nil {
+				ds.Mine = true // a branch in the user's own clone
 			}
 			if ds.PR == nil || len(ds.Commits) == 0 {
 				ds.Commits = lw.Commits
@@ -370,11 +401,14 @@ func (w *Watcher) Sync(ctx context.Context) {
 		} else {
 			w.applied[k] = true
 		}
+		// First state shown for a ticket whose work was already there last time:
+		// a baseline for this ticket, even though its repo is past its own.
+		fires := repoFires && (had || !w.mentioned[k])
 		w.mu.Unlock()
 		if empty && !had {
 			continue
 		}
-		w.o.Apply(k, ds, repoFires)
+		w.o.Apply(k, ds, fires)
 	}
 
 	w.mu.Lock()
@@ -383,6 +417,7 @@ func (w *Watcher) Sync(ctx context.Context) {
 			w.listed[r.Name] = true
 		}
 	}
+	w.mentioned = mentioned
 	w.ran = true
 	w.mu.Unlock()
 	if w.o.Client == nil {
@@ -404,23 +439,28 @@ func (w *Watcher) Sync(ctx context.Context) {
 }
 
 func (w *Watcher) syncLocalOnly(ctx context.Context) {
+	mentioned := map[string]bool{}
 	for _, r := range w.o.Repos {
 		if r.Path == "" {
 			continue
 		}
-		found, err := w.scanLocal(ctx, r.Path, r.Base)
+		found, err := w.scanLocal(ctx, r.Path, r.Base, mentioned)
 		if err != nil {
 			continue
 		}
 		for k, lw := range found {
 			w.mu.Lock()
+			fire := w.ran && (w.applied[k] || !w.mentioned[k])
 			w.applied[k] = true
-			fire := w.ran
 			w.mu.Unlock()
-			w.o.Apply(k, flow.DevState{Repo: r.Name, Branch: lw.Branch, Commits: lw.Commits}, fire)
+			w.o.Apply(k, flow.DevState{Repo: r.Name, Branch: lw.Branch, Commits: lw.Commits, Mine: true}, fire)
 		}
 	}
 	w.mu.Lock()
+	for k := range w.mentioned {
+		mentioned[k] = true // PRs are not listed here: keep what was seen
+	}
+	w.mentioned = mentioned
 	w.ran = true
 	w.mu.Unlock()
 }

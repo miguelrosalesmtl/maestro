@@ -119,12 +119,17 @@ dev:
 
 automation:
   assignOnStart: true
+  # Rules move only tickets assigned to you, for your own branches and pull
+  # requests, and never a ticket that is already Done.
+  anyAssignee: false                             # true: also tickets assigned to others / no one
+  anyAuthor: false                               # true: also pull requests someone else opened
+  dryRun: false                                  # true: log "Would move …", leave Jira alone
   rules:                                         # AUT-01; "to" = Maestro state or Jira status
     - { trigger: branch_created,    to: inProgress }
     # - { trigger: branch_created, to: inProgress, projects: [PLAT], issueTypes: [bug] }   # AUT-02: limit a rule
     - { trigger: pr_opened,         to: inReview }
     - { trigger: changes_requested, to: inProgress }
-    - { trigger: pr_merged,         to: done }
+    - { trigger: pr_merged,         to: done, enabled: false }   # opt in: merged is not tested
     - { trigger: ci_failed,         to: blocked, enabled: false }
 
 agent:

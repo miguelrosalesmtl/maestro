@@ -133,6 +133,18 @@ func (r Rule) Applies(is tracker.Issue) bool {
 	return inList(r.Projects, Project(is.Key)) && inList(r.IssueTypes, string(is.Type))
 }
 
+// Policy limits what automation may touch (config automation.anyAssignee,
+// anyAuthor, dryRun). The zero value is the safe one: rules move only tickets
+// assigned to you, only for your own work, and for real.
+type Policy struct {
+	// AnyAssignee lets rules move tickets assigned to someone else or no one.
+	AnyAssignee bool `json:"anyAssignee"`
+	// AnyAuthor lets pull requests opened by someone else fire rules.
+	AnyAuthor bool `json:"anyAuthor"`
+	// DryRun logs what a rule would do and leaves Jira alone.
+	DryRun bool `json:"dryRun"`
+}
+
 // StepResult is what the UI receives after any flow mutation.
 type StepResult struct {
 	Flow   Flow          `json:"flow"`
@@ -151,6 +163,7 @@ type Engine struct {
 	sim    bool
 	poke   func(key string)
 	naming Naming
+	policy Policy
 }
 
 // DefaultRules are the demo rules (status names of the mock tracker).
@@ -159,7 +172,7 @@ func DefaultRules() []Rule {
 		{ID: "r1", Trigger: TriggerBranchCreated, Label: "Branch created", ToStatus: tracker.StatusInProgress, Enabled: true},
 		{ID: "r2", Trigger: TriggerPROpened, Label: "Pull request opened", ToStatus: tracker.StatusInReview, Enabled: true},
 		{ID: "r3", Trigger: TriggerChangesRequested, Label: "Changes requested", ToStatus: tracker.StatusInProgress, Enabled: true},
-		{ID: "r4", Trigger: TriggerPRMerged, Label: "Pull request merged", ToStatus: tracker.StatusDone, Enabled: true},
+		{ID: "r4", Trigger: TriggerPRMerged, Label: "Pull request merged", ToStatus: tracker.StatusDone, Enabled: false},
 		{ID: "r5", Trigger: TriggerCIFailed, Label: "CI failed", ToStatus: tracker.StatusBlocked, Enabled: false},
 	}
 }
@@ -184,6 +197,7 @@ type Options struct {
 	Poke func(key string)
 	// Naming builds branch names (zero value: DefaultNaming).
 	Naming Naming
+	Policy Policy
 }
 
 // NewEngine is the demo engine used with the mock tracker.
@@ -192,7 +206,7 @@ func NewEngine(tr tracker.Tracker) *Engine {
 }
 
 func NewEngineWith(tr tracker.Tracker, o Options) *Engine {
-	e := &Engine{tr: tr, flows: map[string]*Flow{}, repo: o.Repo, rules: append([]Rule(nil), o.Rules...), sim: o.Simulate, poke: o.Poke, naming: o.Naming}
+	e := &Engine{tr: tr, flows: map[string]*Flow{}, repo: o.Repo, rules: append([]Rule(nil), o.Rules...), sim: o.Simulate, poke: o.Poke, naming: o.Naming, policy: o.Policy}
 	if e.naming.BranchTemplate == "" {
 		e.naming = DefaultNaming()
 	}
@@ -255,6 +269,21 @@ func (e *Engine) SetNaming(n Naming) {
 
 // BranchFor is the branch Maestro suggests for a ticket that has none yet.
 func (e *Engine) BranchFor(is tracker.Issue) string { return e.Naming().Branch(is) }
+
+// Policy is what automation may touch.
+func (e *Engine) Policy() Policy {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.policy
+}
+
+// SetPolicy changes what automation may touch (from the Automations view).
+func (e *Engine) SetPolicy(p Policy) Policy {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.policy = p
+	return e.policy
+}
 
 // SetRules replaces the automation rules (from the Automations view).
 func (e *Engine) SetRules(rules []Rule) []Rule {
@@ -323,7 +352,9 @@ func (e *Engine) emit(key, kind, title, detail, at string) Event {
 }
 
 // fire applies every enabled rule for trigger and returns the events produced.
-func (e *Engine) fire(key string, trig Trigger) []Event {
+// mine is true when the event is the user's own work: a branch in their clone,
+// a command in their terminal, or a pull request they opened.
+func (e *Engine) fire(key string, trig Trigger, mine bool) []Event {
 	var out []Event
 	for _, r := range e.rules {
 		if !r.Enabled || r.Trigger != trig {
@@ -331,6 +362,21 @@ func (e *Engine) fire(key string, trig Trigger) []Event {
 		}
 		is, err := e.tr.GetIssue(key)
 		if err != nil || is.Status == r.ToStatus || !r.Applies(is) {
+			continue
+		}
+		if why := e.hold(is, mine); why != "" {
+			slog.Info("automation held", "component", "flow", "key", key, "rule", r.ID, "trigger", string(trig), "why", why)
+			if mine && why == holdNotAssigned {
+				// Your own work on a ticket that is not yours: say why nothing moved.
+				out = append(out, e.emit(key, "automation", fmt.Sprintf("Stayed in %s", is.Status),
+					fmt.Sprintf("Rule “%s” skipped: the ticket is not assigned to you", r.Label), ""))
+			}
+			continue
+		}
+		if e.policy.DryRun {
+			slog.Info("automation dry run", "component", "flow", "key", key, "rule", r.ID, "trigger", string(trig), "from", is.Status, "to", r.ToStatus)
+			out = append(out, e.emit(key, "automation", fmt.Sprintf("Would move %s → %s", is.Status, r.ToStatus),
+				fmt.Sprintf("Dry run: rule “%s” left Jira unchanged", r.Label), ""))
 			continue
 		}
 		if _, err := e.tr.Transition(key, r.ToStatus); err != nil {
@@ -343,6 +389,25 @@ func (e *Engine) fire(key string, trig Trigger) []Event {
 			fmt.Sprintf("Rule “%s” fired", r.Label), ""))
 	}
 	return out
+}
+
+const (
+	holdDone        = "ticket is done"
+	holdNotAssigned = "ticket is not assigned to you"
+	holdNotMine     = "someone else's pull request"
+)
+
+// hold says why automation must leave a ticket alone, or "".
+func (e *Engine) hold(is tracker.Issue, mine bool) string {
+	switch {
+	case is.StatusCategory == tracker.CategoryDone || is.State == "done":
+		return holdDone // finished work is never reopened or re-closed by a rule
+	case !e.policy.AnyAssignee && (is.Assignee == nil || is.Assignee.ID != e.tr.CurrentUser().ID):
+		return holdNotAssigned
+	case !e.policy.AnyAuthor && !mine:
+		return holdNotMine
+	}
+	return ""
 }
 
 func (f *Flow) stage(id string) *Stage {
@@ -392,7 +457,7 @@ func (e *Engine) start(key string) (StepResult, error) {
 	f.Branch = e.naming.Branch(is)
 	f.complete("branch", f.Branch)
 	evs := []Event{e.emit(key, "dev", "Branch created", f.Branch, "")}
-	evs = append(evs, e.fire(key, TriggerBranchCreated)...)
+	evs = append(evs, e.fire(key, TriggerBranchCreated, true)...)
 	return e.result(f, evs)
 }
 
@@ -432,7 +497,7 @@ func (e *Engine) advance(key string) (StepResult, error) {
 			Checks: []Check{{Name: "build", State: StateActive}, {Name: "unit-tests", State: StateActive}, {Name: "lint", State: StateActive}}, Reviewers: []string{"Ana Torres", "Devon Park"}}
 		f.complete("pr", fmt.Sprintf("#%d opened", f.PR.Number))
 		evs = append(evs, e.emit(key, "dev", fmt.Sprintf("PR #%d opened", f.PR.Number), f.PR.Title, ""))
-		evs = append(evs, e.fire(key, TriggerPROpened)...)
+		evs = append(evs, e.fire(key, TriggerPROpened, true)...)
 	case f.stage("ci").State == StateActive:
 		for i := range f.PR.Checks {
 			f.PR.Checks[i].State = StateDone
@@ -443,12 +508,12 @@ func (e *Engine) advance(key string) (StepResult, error) {
 		f.PR.Approvals = 2
 		f.complete("review", "2 approvals")
 		evs = append(evs, e.emit(key, "dev", "PR approved", "Ana Torres, Devon Park approved", ""))
-		evs = append(evs, e.fire(key, TriggerReviewApproved)...)
+		evs = append(evs, e.fire(key, TriggerReviewApproved, true)...)
 	case f.stage("merged").State == StateActive:
 		f.PR.State = "merged"
 		f.complete("merged", "squash-merged into main")
 		evs = append(evs, e.emit(key, "dev", fmt.Sprintf("PR #%d merged", f.PR.Number), "squash-merged into main", ""))
-		evs = append(evs, e.fire(key, TriggerPRMerged)...)
+		evs = append(evs, e.fire(key, TriggerPRMerged, true)...)
 	}
 	return e.result(f, evs)
 }

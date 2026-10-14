@@ -115,7 +115,7 @@ Both are remembered.
 | **Terminal dock** | Real shell (PTY) per ticket. `$MAESTRO_TICKET`, `$MAESTRO_BRANCH`, `$MAESTRO_SUMMARY` are set; one-click ticket commands; `git checkout -b`, `git push`, `gh pr create`, `gh pr merge` typed here advance the flow and the Jira status. |
 | **Board** | *Your sprint* (the active sprint of your projects), or any Jira board: **Find board** (`w`) searches every board on the site; pin the ones you follow. A board shows its own Jira columns and any sprint you pick (active, upcoming, recently closed); kanban boards show open work. Drag a card to transition it; `r` reloads, `]` / `[` switch boards. Pins and the last sprint per board are remembered. |
 | **Roadmap** | Initiative → Epic → tickets with rolled-up progress. |
-| **Automations** | Rules: *when* dev event *then* move ticket to status. Each rule can be limited to some projects and issue types (the filter button on the rule); add or delete rules with **+ Rule** and the bin. With live Jira, changes are saved to `config.yaml`. Two enabled rules for the same event and scope are refused. |
+| **Automations** | Rules: *when* dev event *then* move ticket to status, only for your own tickets and work unless you widen it (switches at the top), with a dry-run switch. Each rule can be limited to some projects and issue types (the filter button on the rule); add or delete rules with **+ Rule** and the bin. With live Jira, changes are saved to `config.yaml`. Two enabled rules for the same event and scope are refused. |
 | **Freestyle** | Terminals not linked to a ticket, for investigations. They start in your home folder, get no ticket variables, and never move a ticket. Double-click a tab to rename it; tabs are remembered. |
 | **Settings** | `Ctrl+,` or the gear at the bottom of the left bar. Branch name and pull request templates (with a live preview on your ticket), merge method, terminal shell, environment, startup commands, extra one-click commands, and per-project terminal setup. Only what you change is written to `config.yaml`; the rest keeps coming from the defaults and your team file. `Ctrl+S` saves. (Saving rewrites `config.yaml`, so comments in it are not kept.) |
 | **Jira view** | Any ticket rendered like Jira: description, child issues / sub-tasks, linked issues (add/remove), comments, history. |
@@ -239,8 +239,15 @@ With Jira connected, Maestro follows the pull requests of every repository in
 | A branch with the key appears (local clone or PR) | → In Progress |
 | PR opened, or a draft marked ready | → In Review |
 | Changes requested | → In Progress |
-| PR merged | → Done |
+| PR merged | → Done (off by default: merged is not reviewed and tested) |
 | A required check fails | → Blocked (off by default) |
+
+**What rules may touch.** Rules only move tickets **assigned to you**, and only for **your own
+work**: a branch in your clone, a command in your ticket terminal, or a pull request you opened.
+A teammate's PR that names your ticket shows on the timeline and fires nothing. A ticket already
+in a Done status is never moved by a rule. The switches at the top of **Automations** (config
+`automation.anyAssignee`, `automation.anyAuthor`) widen this. **Dry run**
+(`automation.dryRun`) logs “Would move …” in the automation log and leaves Jira alone.
 
 - **Matching:** the issue key (`dev.keyPattern`) in the head branch, else the PR title, else the
   body. Only keys of issues Maestro has synced count.
@@ -250,7 +257,9 @@ With Jira connected, Maestro follows the pull requests of every repository in
 - **Local work:** branches in the repo's `path` that name a ticket show up with their commits
   (and line counts) before a PR exists.
 - **Startup is quiet:** the first look only shows the current state. Only changes seen while
-  Maestro runs fire rules, so an old merged PR never moves a reopened ticket to Done.
+  Maestro runs fire rules, so an old merged PR never moves a reopened ticket to Done. The same
+  holds per ticket: one that joins the synced set later (reassigned to you, edited back into
+  the window) has its existing branch and PR shown, not replayed.
 - **Jira link:** each PR is added to the issue as a web link (resolved once merged or closed).
   Turn off with `jira.writeBack.remoteLinks: false`.
 - **Cost:** one PR listing per repo per `dev.github.pollSeconds` (default 60), with ETags, so

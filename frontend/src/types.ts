@@ -277,6 +277,17 @@ export interface Snapshot {
   customColumns: CustomColumn[]
   naming: Naming
   commands: QuickCommand[]
+  policy: Policy
+}
+
+/**
+ * What automation rules may touch (backend flow.Policy). The zero value is the
+ * safe one: only tickets assigned to you, only your own work, for real.
+ */
+export interface Policy {
+  anyAssignee: boolean
+  anyAuthor: boolean
+  dryRun: boolean
 }
 
 /** Where the data comes from (backend connect.go). */

@@ -105,6 +105,9 @@ export namespace config {
 	    Rules: Rule[];
 	    AssignOnStart?: boolean;
 	    RollUp: RollUp;
+	    AnyAssignee: boolean;
+	    AnyAuthor: boolean;
+	    DryRun: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Automation(source);
@@ -115,6 +118,9 @@ export namespace config {
 	        this.Rules = this.convertValues(source["Rules"], Rule);
 	        this.AssignOnStart = source["AssignOnStart"];
 	        this.RollUp = this.convertValues(source["RollUp"], RollUp);
+	        this.AnyAssignee = source["AnyAssignee"];
+	        this.AnyAuthor = source["AnyAuthor"];
+	        this.DryRun = source["DryRun"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1285,6 +1291,22 @@ export namespace flow {
 	        this.mergeMethod = source["mergeMethod"];
 	    }
 	}
+	export class Policy {
+	    anyAssignee: boolean;
+	    anyAuthor: boolean;
+	    dryRun: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new Policy(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.anyAssignee = source["anyAssignee"];
+	        this.anyAuthor = source["anyAuthor"];
+	        this.dryRun = source["dryRun"];
+	    }
+	}
 	
 	export class Rule {
 	    id: string;
@@ -1522,6 +1544,7 @@ export namespace main {
 	    customColumns: tracker.CustomColumn[];
 	    naming: flow.Naming;
 	    commands: config.QuickCommand[];
+	    policy: flow.Policy;
 	
 	    static createFrom(source: any = {}) {
 	        return new Snapshot(source);
@@ -1549,6 +1572,7 @@ export namespace main {
 	        this.customColumns = this.convertValues(source["customColumns"], tracker.CustomColumn);
 	        this.naming = this.convertValues(source["naming"], flow.Naming);
 	        this.commands = this.convertValues(source["commands"], config.QuickCommand);
+	        this.policy = this.convertValues(source["policy"], flow.Policy);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

@@ -52,6 +52,8 @@ export function ResetFlow(arg1:string):Promise<flow.StepResult>;
 
 export function SaveKeybindings(arg1:config.Keybindings):Promise<main.KeybindingsInfo>;
 
+export function SavePolicy(arg1:flow.Policy):Promise<flow.Policy>;
+
 export function SaveRules(arg1:Array<flow.Rule>):Promise<Array<flow.Rule>>;
 
 export function SaveSettings(arg1:main.Settings):Promise<main.Settings>;

@@ -149,6 +149,8 @@ type Snapshot struct {
 	// Naming builds branch names and pull request text (Settings).
 	Naming   flow.Naming           `json:"naming"`
 	Commands []config.QuickCommand `json:"commands"` // extra one-click terminal commands
+	// Policy is what automation rules may touch (Automations view).
+	Policy flow.Policy `json:"policy"`
 }
 
 func (a *App) Snapshot() Snapshot {
@@ -167,7 +169,7 @@ func (a *App) Snapshot() Snapshot {
 		LinkTypes: orEmptyMap(m.LinkTypes), Projects: orEmpty(m.Projects), Live: m.Live,
 		Sprints: orEmpty(m.Sprints), Versions: orEmptyMap(m.Versions), CreateDefaults: m.CreateDefaults, TimeTracking: m.TimeTracking,
 		CustomColumns: orEmpty(m.CustomColumns),
-		Naming:        fl.Naming(), Commands: orEmpty(a.conf().Terminal.Commands),
+		Naming:        fl.Naming(), Commands: orEmpty(a.conf().Terminal.Commands), Policy: fl.Policy(),
 	}
 }
 

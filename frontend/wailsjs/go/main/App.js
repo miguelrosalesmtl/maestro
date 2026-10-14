@@ -94,6 +94,10 @@ export function SaveKeybindings(arg1) {
   return window['go']['main']['App']['SaveKeybindings'](arg1);
 }
 
+export function SavePolicy(arg1) {
+  return window['go']['main']['App']['SavePolicy'](arg1);
+}
+
 export function SaveRules(arg1) {
   return window['go']['main']['App']['SaveRules'](arg1);
 }

@@ -246,6 +246,36 @@ func (a *App) SaveRules(rules []flow.Rule) ([]flow.Rule, error) {
 	return fl.SetRules(orEmpty(next)), nil
 }
 
+// SavePolicy changes what automation rules may touch. Live, it is saved to
+// the personal config (automation.anyAssignee, anyAuthor, dryRun); in the
+// demo it lasts until Maestro quits.
+func (a *App) SavePolicy(p flow.Policy) (flow.Policy, error) {
+	fl := a.fl()
+	a.mu.RLock()
+	lt := a.live
+	a.mu.RUnlock()
+	if lt == nil || a.layers == nil {
+		return fl.SetPolicy(p), nil
+	}
+
+	a.cfgMu.Lock()
+	defer a.cfgMu.Unlock()
+	old := a.layers.Personal
+	next := *old
+	next.Automation.AnyAssignee, next.Automation.AnyAuthor, next.Automation.DryRun = p.AnyAssignee, p.AnyAuthor, p.DryRun
+	if err := a.layers.SetPersonal(&next); err != nil {
+		_ = a.layers.SetPersonal(old)
+		return fl.Policy(), err
+	}
+	if err := a.layers.SavePersonal(); err != nil {
+		_ = a.layers.SetPersonal(old)
+		return fl.Policy(), a.fail("save automation policy", err)
+	}
+	a.cfg = a.layers.Effective
+	a.log.Info("automation policy saved", "anyAssignee", p.AnyAssignee, "anyAuthor", p.AnyAuthor, "dryRun", p.DryRun)
+	return fl.SetPolicy(policyFrom(a.cfg)), nil
+}
+
 // flowIfReady is the flow engine, or nil before startup has chosen one.
 func (a *App) flowIfReady() *flow.Engine {
 	select {

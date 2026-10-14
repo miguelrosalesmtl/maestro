@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { api } from './api'
 import { EventsOn } from '../wailsjs/runtime/runtime'
 import { reportError } from './lib/errors'
-import type { Connection, FreeSession, GitHubStatus, CreateDefaults, CustomColumn, FieldPatch, SprintInfo, TermActivity, TermLightState, VersionInfo, Flow, FlowEvent, Issue, IssueType, Naming, NewIssue, QuickCommand, Rule, Settings, StepResult, User, View } from './types'
+import type { Connection, FreeSession, GitHubStatus, CreateDefaults, CustomColumn, FieldPatch, SprintInfo, TermActivity, TermLightState, VersionInfo, Flow, FlowEvent, Issue, IssueType, Naming, NewIssue, Policy, QuickCommand, Rule, Settings, StepResult, User, View } from './types'
 import { isWork, setStatusStates } from './lib/util'
 import { defaultNaming } from './lib/naming'
 import { chirp, loadMuted, saveMuted } from './lib/chirp'
@@ -75,6 +75,9 @@ interface Store {
   saveRules: (rules: Rule[]) => Promise<boolean>
   toggleRule: (id: string) => Promise<boolean>
   setRuleStatus: (id: string, status: string) => Promise<boolean>
+  /** What rules may touch: others' tickets, others' pull requests, dry run. */
+  policy: Policy
+  savePolicy: (p: Policy) => Promise<void>
   /** Branch / pull request naming and extra terminal commands (Settings). */
   naming: Naming
   commands: QuickCommand[]
@@ -123,6 +126,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   rulesRef.current = rules
   const [naming, setNaming] = useState<Naming>(defaultNaming)
   const [commands, setCommands] = useState<QuickCommand[]>([])
+  const [policy, setPolicy] = useState<Policy>({ anyAssignee: false, anyAuthor: false, dryRun: false })
   const [activity, setActivity] = useState<FlowEvent[]>([])
   const [toasts, setToasts] = useState<Toast[]>([])
   const [users, setUsers] = useState<User[]>([])
@@ -182,6 +186,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setCustomColumns(s.customColumns ?? [])
       if (s.naming) setNaming(s.naming)
       setCommands(s.commands ?? [])
+      if (s.policy) setPolicy(s.policy)
       setLive(!!s.live)
       // Focus a ticket that exists: the deep link, else my first open work item.
       setFocusKey(k => {
@@ -310,6 +315,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     }
   }, [pushToast])
 
+  const savePolicy = useCallback(async (next: Policy) => {
+    try {
+      setPolicy(await api.savePolicy(next))
+    } catch (err) {
+      pushToast({ tone: 'error', title: 'Automation setting not saved', detail: String(err).replace(/^Error: /, '') })
+    }
+  }, [pushToast])
+
   const value = useMemo<Store>(() => ({
     ready, me, issues, flows, statuses, rules, activity, toasts, users, sprint, childTypes, linkTypes,
     view, setView, focusKey, setFocusKey,
@@ -412,13 +425,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     link: guard(async (from, type, to) => { putIssues(await api.link(from, type, to)); setActivity(await api.activity()) }),
     unlink: guard(async (from, type, to) => putIssues(await api.unlink(from, type, to))),
-    saveRules, naming, commands,
+    saveRules, naming, commands, policy, savePolicy,
     toggleRule: id => saveRules(rulesRef.current.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r)),
     setRuleStatus: (id, status) => saveRules(rulesRef.current.map(r => r.id === id ? { ...r, toStatus: status } : r)),
     applySettings: st => { setNaming(st.naming); setCommands(st.terminal.commands ?? []) },
     copy: (text, label) => { api.copy(text); pushToast({ tone: 'dev', title: 'Copied to clipboard', detail: label ?? text }) },
     dismissToast: id => setToasts(ts => ts.filter(t => t.id !== id)),
-  }), [ready, me, issues, flows, statuses, rules, activity, toasts, users, sprint, childTypes, linkTypes, createDraft, connection, github, live, projects, sprints, versions, createDefaults, timeTracking, customColumns, view, focusKey, jiraKey, paletteOpen, termOpen, termSessions, activeSession, termActivity, chirpMuted, freeSessions, activeFree, setFreeSessions, guard, applyStep, pushToast, saveRules, naming, commands])
+  }), [ready, me, issues, flows, statuses, rules, activity, toasts, users, sprint, childTypes, linkTypes, createDraft, connection, github, live, projects, sprints, versions, createDefaults, timeTracking, customColumns, view, focusKey, jiraKey, paletteOpen, termOpen, termSessions, activeSession, termActivity, chirpMuted, freeSessions, activeFree, setFreeSessions, guard, applyStep, pushToast, saveRules, naming, commands, policy, savePolicy])
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

@@ -315,6 +315,12 @@ type Automation struct {
 	Rules         []Rule `yaml:"rules,omitempty"` // AUT-01
 	AssignOnStart *bool  `yaml:"assignOnStart,omitempty"`
 	RollUp        RollUp `yaml:"rollUp,omitempty"` // AUT-04
+	// Rules move only tickets assigned to you, for your own branches and pull
+	// requests. AnyAssignee and AnyAuthor widen that; DryRun only logs.
+	// A ticket in a Done status is never moved by a rule.
+	AnyAssignee bool `yaml:"anyAssignee,omitempty"`
+	AnyAuthor   bool `yaml:"anyAuthor,omitempty"`
+	DryRun      bool `yaml:"dryRun,omitempty"`
 }
 
 type Rule struct {

@@ -27,7 +27,7 @@ const scopeText = (r: Rule) => {
 }
 
 export function AutomationsView() {
-  const { rules, statuses, projects, live, toggleRule, setRuleStatus, saveRules, activity } = useStore()
+  const { rules, statuses, projects, live, toggleRule, setRuleStatus, saveRules, policy, savePolicy, activity } = useStore()
   const log = activity.filter(e => e.kind === 'automation')
   const [editing, setEditing] = useState<string | null>(null)
   const [adding, setAdding] = useState<{ trigger: string; toStatus: string } | null>(null)
@@ -52,6 +52,33 @@ export function AutomationsView() {
         {!adding && (
           <button className="btn primary" onClick={() => setAdding({ trigger: 'branch_created', toStatus: statuses[0] ?? '' })}><Plus size={14} /> Rule</button>
         )}
+      </div>
+
+      <div className="card rule-policy">
+        <div className="policy-row">
+          <div>
+            <div className="rule-label">Only tickets assigned to me</div>
+            <div className="muted small">Teammates' tickets are never moved. Done tickets are never moved by a rule either.</div>
+          </div>
+          <button className={cx('switch', !policy.anyAssignee && 'on')} aria-label="Only tickets assigned to me"
+            onClick={() => void savePolicy({ ...policy, anyAssignee: !policy.anyAssignee })}><i /></button>
+        </div>
+        <div className="policy-row">
+          <div>
+            <div className="rule-label">Only my branches and pull requests</div>
+            <div className="muted small">A pull request someone else opened for your ticket shows on the timeline but fires nothing.</div>
+          </div>
+          <button className={cx('switch', !policy.anyAuthor && 'on')} aria-label="Only my branches and pull requests"
+            onClick={() => void savePolicy({ ...policy, anyAuthor: !policy.anyAuthor })}><i /></button>
+        </div>
+        <div className="policy-row">
+          <div>
+            <div className="rule-label">Dry run</div>
+            <div className="muted small">Log what each rule would do in the automation log below, and leave Jira alone.</div>
+          </div>
+          <button className={cx('switch', policy.dryRun && 'on')} aria-label="Dry run"
+            onClick={() => void savePolicy({ ...policy, dryRun: !policy.dryRun })}><i /></button>
+        </div>
       </div>
 
       <div className="rules">

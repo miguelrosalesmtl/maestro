@@ -11,6 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"maestro/internal/config"
+	"maestro/internal/flow"
 	"maestro/internal/secrets"
 	"maestro/internal/tracker/jira/jiratest"
 )
@@ -160,5 +161,13 @@ func TestSaveRulesLive(t *testing.T) {
 	}
 	if n := len(app.fl().Rules()); n != len(saved) {
 		t.Fatalf("refused rules must not apply: %d rules", n)
+	}
+	// The automation policy is saved too and applies right away.
+	if p, err := app.SavePolicy(flow.Policy{DryRun: true}); err != nil || !p.DryRun || !app.Snapshot().Policy.DryRun {
+		t.Fatalf("policy %+v, %v", p, err)
+	}
+	file, _ = os.ReadFile(l.PersonalPath)
+	if !strings.Contains(string(file), "dryRun: true") || strings.Contains(string(file), "anyAuthor") {
+		t.Fatalf("policy in file:\n%s", file)
 	}
 }

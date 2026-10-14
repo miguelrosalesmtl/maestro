@@ -19,7 +19,7 @@ func TestTerminalCommandsDriveTicket(t *testing.T) {
 		{"git checkout -b feature/PLAT-143-rollback", tracker.StatusInProgress},
 		{"git push -u origin feature/PLAT-143-rollback", tracker.StatusInProgress},
 		{`gh pr create --title "[PLAT-143] Automatic rollback"`, tracker.StatusInReview},
-		{"gh pr merge --squash", tracker.StatusDone},
+		{"gh pr merge --squash", tracker.StatusInReview}, // "PR merged" ships off: QA comes first
 	}
 	for _, s := range steps {
 		res, ok := e.OnCommand(key, s.cmd)

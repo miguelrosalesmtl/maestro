@@ -504,6 +504,9 @@ html.mac .sidebar-head { padding-top: 30px; }
 
 /* Automations */
 .automations { height: 100%; padding: 22px 26px 40px; display: flex; flex-direction: column; gap: 18px; }
+.rule-policy { display: flex; flex-direction: column; padding: 4px 20px; margin-bottom: 14px; }
+.policy-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 10px 0; }
+.policy-row + .policy-row { border-top: 1px solid var(--border); }
 .rules { display: flex; flex-direction: column; gap: 10px; }
 .rule { display: grid; grid-template-columns: 1fr auto 1fr auto; align-items: center; gap: 22px; padding: 14px 20px; transition: opacity .2s; }
 .rule.off { opacity: .5; }

@@ -39,42 +39,45 @@ func TestApplyDevBaselineDoesNotFire(t *testing.T) {
 
 func TestApplyDevFiresOnObservedChanges(t *testing.T) {
 	e, tr := liveEngine(t)
+	rules := e.Rules()
+	rules[3].Enabled = true // "PR merged" → Done, off by default
+	e.SetRules(rules)
 	key := "PLAT-143"
 	status := func() string { is, _ := tr.GetIssue(key); return is.Status }
 
 	e.ApplyDev(key, DevState{}, false) // nothing at startup
-	res, _ := e.ApplyDev(key, DevState{Repo: "acme/app", Branch: "feature/PLAT-143-x", Commits: []Commit{{SHA: "a1", Message: "PLAT-143: start"}}}, true)
+	res, _ := e.ApplyDev(key, DevState{Repo: "acme/app", Branch: "feature/PLAT-143-x", Commits: []Commit{{SHA: "a1", Message: "PLAT-143: start"}}, Mine: true}, true)
 	if status() != tracker.StatusInProgress || stageOf(res.Flow, "pr").State != StateActive {
 		t.Fatalf("branch created: %s %+v", status(), res.Flow.Stages)
 	}
 
 	pr := PullRequest{Number: 12, Title: "PLAT-143", State: "open", Draft: true, Base: "main", RequiredApprovals: 2,
 		Checks: []Check{{Name: "build", State: StateActive}}}
-	e.ApplyDev(key, DevState{Branch: "feature/PLAT-143-x", PR: &pr}, true)
+	e.ApplyDev(key, DevState{Branch: "feature/PLAT-143-x", PR: &pr, Mine: true}, true)
 	if status() != tracker.StatusInProgress {
 		t.Fatalf("a draft PR is not ready for review: %s", status())
 	}
 	pr.Draft = false
-	res, _ = e.ApplyDev(key, DevState{Branch: "feature/PLAT-143-x", PR: &pr}, true)
+	res, _ = e.ApplyDev(key, DevState{Branch: "feature/PLAT-143-x", PR: &pr, Mine: true}, true)
 	if status() != tracker.StatusInReview || stageOf(res.Flow, "ci").State != StateActive {
 		t.Fatalf("ready for review: %s %+v", status(), res.Flow.Stages)
 	}
 
 	pr.Checks = []Check{{Name: "build", State: StateDone}}
 	pr.ChangesRequested = []string{"ana"}
-	res, _ = e.ApplyDev(key, DevState{Branch: "feature/PLAT-143-x", PR: &pr}, true)
+	res, _ = e.ApplyDev(key, DevState{Branch: "feature/PLAT-143-x", PR: &pr, Mine: true}, true)
 	if status() != tracker.StatusInProgress || stageOf(res.Flow, "review").State != StateFailed || stageOf(res.Flow, "ci").State != StateDone {
 		t.Fatalf("changes requested: %s %+v", status(), res.Flow.Stages)
 	}
 
 	pr.ChangesRequested, pr.Approvals, pr.ApprovedBy = nil, 2, []string{"ana", "bo"}
-	res, _ = e.ApplyDev(key, DevState{Branch: "feature/PLAT-143-x", PR: &pr}, true)
+	res, _ = e.ApplyDev(key, DevState{Branch: "feature/PLAT-143-x", PR: &pr, Mine: true}, true)
 	if stageOf(res.Flow, "review").State != StateDone || stageOf(res.Flow, "merged").State != StateActive {
 		t.Fatalf("approved: %+v", res.Flow.Stages)
 	}
 
 	pr.State = "merged"
-	res, _ = e.ApplyDev(key, DevState{Branch: "feature/PLAT-143-x", PR: &pr}, true)
+	res, _ = e.ApplyDev(key, DevState{Branch: "feature/PLAT-143-x", PR: &pr, Mine: true}, true)
 	if status() != tracker.StatusDone || stageOf(res.Flow, "merged").State != StateDone {
 		t.Fatalf("merged: %s %+v", status(), res.Flow.Stages)
 	}

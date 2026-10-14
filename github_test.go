@@ -15,7 +15,7 @@ import (
 )
 
 // A pull request on GitHub moves the real Jira issue: opened → review,
-// merged → done, and the PR is linked on the issue.
+// merged → done (once opted in), and the PR is linked on the issue.
 func TestGitHubDrivesJiraEndToEnd(t *testing.T) {
 	keyring.MockInit()
 	f := jiratest.NewTLS(t)
@@ -32,6 +32,7 @@ func TestGitHubDrivesJiraEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.SetStatus("PLAT-2", "In Progress")
+	cfg.Automation.Rules[3].Enabled = nil // opt in to "PR merged" → done (off by default)
 
 	app := NewApp(cfg, nil)
 	app.connect()

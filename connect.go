@@ -81,7 +81,7 @@ func (a *App) connect() {
 	}
 
 	rules, repo := liveRules(a.conf(), lt.Meta())
-	fl := flow.NewEngineWith(lt, flow.Options{Rules: rules, Repo: repo, Poke: a.pokeDev, Naming: namingFrom(a.conf())})
+	fl := flow.NewEngineWith(lt, flow.Options{Rules: rules, Repo: repo, Poke: a.pokeDev, Naming: namingFrom(a.conf()), Policy: policyFrom(a.conf())})
 	st := lt.Status()
 	conn.Mode, conn.State, conn.LastSync, conn.Issues = "live", string(st.State), st.LastSync, st.Issues
 	a.mu.Lock()
@@ -196,6 +196,12 @@ func liveRules(cfg *config.Config, meta tracker.Meta) ([]flow.Rule, string) {
 		}
 	}
 	return rules, repo
+}
+
+// policyFrom reads what automation may touch.
+func policyFrom(cfg *config.Config) flow.Policy {
+	au := cfg.Automation
+	return flow.Policy{AnyAssignee: au.AnyAssignee, AnyAuthor: au.AnyAuthor, DryRun: au.DryRun}
 }
 
 // namingFrom reads dev.branch and dev.pr.

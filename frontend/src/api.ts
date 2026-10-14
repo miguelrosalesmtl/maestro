@@ -1,6 +1,6 @@
 // Thin typed wrapper over the generated Wails bindings.
 import * as App from '../wailsjs/go/main/App'
-import type { BoardInfo, JiraBoard, SprintInfo, Connection, GitHubStatus, FieldPatch, FieldSpec, Flow, Issue, IssueType, NewIssue, Rule, Settings, Snapshot, StepResult, Transition, FlowEvent } from './types'
+import type { BoardInfo, JiraBoard, SprintInfo, Connection, GitHubStatus, FieldPatch, FieldSpec, Flow, Issue, IssueType, NewIssue, Policy, Rule, Settings, Snapshot, StepResult, Transition, FlowEvent } from './types'
 
 // Every backend call goes through call(): if a binding is missing (backend older
 // than the UI, bridge not ready) it throws synchronously, which would escape
@@ -25,6 +25,7 @@ export const api = {
   resetFlow: (key: string) => call<StepResult>(() => App.ResetFlow(key)),
   activity: () => call<FlowEvent[]>(() => App.GetActivity()),
   saveRules: (rules: Rule[]) => call<Rule[]>(() => App.SaveRules(rules as never)),
+  savePolicy: (p: Policy) => call<Policy>(() => App.SavePolicy(p as never)),
   settings: () => call<Settings>(() => App.GetSettings()),
   saveSettings: (s: Settings) => call<Settings>(() => App.SaveSettings(s as never)),
   openURL: (url: string) => call<void>(() => App.OpenURL(url)),

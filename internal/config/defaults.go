@@ -44,7 +44,8 @@ func Default() *Config {
 				{Trigger: TriggerBranchCreated, To: string(StateInProgress)},
 				{Trigger: TriggerPROpened, To: string(StateInReview)},
 				{Trigger: TriggerChangesRequested, To: string(StateInProgress)},
-				{Trigger: TriggerPRMerged, To: string(StateDone)},
+				// Off: a merge is not the end of review and QA. Opt in per team.
+				{Trigger: TriggerPRMerged, To: string(StateDone), Enabled: ptr(false)},
 				{Trigger: TriggerCIFailed, To: string(StateBlocked), Enabled: ptr(false)},
 			},
 			AssignOnStart: ptr(true),
