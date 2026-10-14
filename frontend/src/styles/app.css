@@ -875,6 +875,12 @@ select.input option { background: #16161f; }
 .tt-finished i { background: var(--green); }
 .tab-n { font: 10px var(--mono); color: var(--text-3); }
 .tab-cmd { font: 10px var(--mono); color: var(--accent-2); max-width: 70px; overflow: hidden; text-overflow: ellipsis; }
+.tab-mem { font: 600 10px var(--mono); padding: 1px 5px; border-radius: 5px; color: var(--text-3); background: var(--surface-2); }
+.tab-mem.mem-high { color: var(--amber, #f5b942); background: color-mix(in srgb, var(--amber, #f5b942) 14%, transparent); }
+.tab-mem.mem-over { color: var(--red); background: color-mix(in srgb, var(--red) 18%, transparent); }
+.mem-total { font: 11px var(--mono); color: var(--text-3); margin-right: 10px; }
+.mem-total.mem-high { color: var(--amber, #f5b942); }
+.mem-total.mem-over { color: var(--red); font-weight: 600; }
 
 /* Rail: visible labels and shortcut keys; tooltip above the sidebar */
 .rail { position: relative; z-index: 30; }

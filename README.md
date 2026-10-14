@@ -202,6 +202,14 @@ their screen, while you are in another view. If Maestro was started from inside 
 session, its terminals do not inherit that session's markers, so Claude Code in them runs as a
 normal session.
 
+**Memory per terminal.** Each tab shows what its terminal costs: the shell and everything started
+in it (an agent, its sub-agents, a test runner's workers), measured every 3 s. On macOS it is the
+figure Activity Monitor shows, compressed memory included. Hover for the process count and the
+heaviest programs; the dock header shows all terminals together. A terminal over
+`terminal.memoryWarnMB` (default 4096, 0 = off) turns red and raises a warning once.
+**Closing a tab ends everything started in it**, background jobs and programs that ignore the
+hangup included (after a 2 s grace); quitting Maestro does the same for every terminal.
+
 | Keys (Linux; ⌘ on macOS) | |
 |---|---|
 | `` Ctrl+` `` | Open the terminal / jump into it / back to the app |

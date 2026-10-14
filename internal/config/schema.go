@@ -349,6 +349,18 @@ type Terminal struct {
 	// Projects adds env and startup commands for one project's ticket terminals
 	// (a map, so the team and personal files merge per project).
 	Projects map[string]ProjectTerminal `yaml:"projects,omitempty"`
+	// MemoryWarnMB: warn when one terminal (its shell and everything started
+	// in it) uses more than this. 0 turns the warning off; nil = 4096.
+	MemoryWarnMB *int `yaml:"memoryWarnMB,omitempty"`
+}
+
+// MemoryWarnBytes is the warning threshold in bytes (0 = off).
+func (t Terminal) MemoryWarnBytes() int64 {
+	mb := 4096
+	if t.MemoryWarnMB != nil {
+		mb = *t.MemoryWarnMB
+	}
+	return int64(max(mb, 0)) << 20
 }
 
 // ProjectTerminal is the extra setup for one project's ticket terminals.

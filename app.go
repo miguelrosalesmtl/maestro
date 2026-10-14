@@ -58,6 +58,7 @@ func NewApp(cfg *config.Config, logs *applog.Logs) *App {
 		},
 		OnExit:     func(key string) { wruntime.EventsEmit(a.ctx, "term:exit", key) },
 		OnActivity: func(ev term.Activity) { a.onTermActivity(ev) },
+		OnUsage:    func(u []term.Usage) { wruntime.EventsEmit(a.ctx, "term:usage", u) },
 		OnCommand: func(session, line string) {
 			if res, ok := a.fl().OnCommand(term.SessionTicket(session), line); ok {
 				wruntime.EventsEmit(a.ctx, "flow:step", res)
@@ -151,6 +152,8 @@ type Snapshot struct {
 	Commands []config.QuickCommand `json:"commands"` // extra one-click terminal commands
 	// Policy is what automation rules may touch (Automations view).
 	Policy flow.Policy `json:"policy"`
+	// MemoryWarn: warn when one terminal uses more bytes than this (0 = off).
+	MemoryWarn int64 `json:"memoryWarn"`
 }
 
 func (a *App) Snapshot() Snapshot {
@@ -170,6 +173,7 @@ func (a *App) Snapshot() Snapshot {
 		Sprints: orEmpty(m.Sprints), Versions: orEmptyMap(m.Versions), CreateDefaults: m.CreateDefaults, TimeTracking: m.TimeTracking,
 		CustomColumns: orEmpty(m.CustomColumns),
 		Naming:        fl.Naming(), Commands: orEmpty(a.conf().Terminal.Commands), Policy: fl.Policy(),
+		MemoryWarn: a.conf().Terminal.MemoryWarnBytes(),
 	}
 }
 

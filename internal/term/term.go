@@ -46,6 +46,9 @@ type Hooks struct {
 	OnCommand func(key, line string)
 	// OnActivity reports running / waiting / idle changes (see activity.go).
 	OnActivity func(Activity)
+	// OnUsage reports the memory and CPU of every open terminal (usage.go),
+	// every UsageEvery while the monitor runs.
+	OnUsage func([]Usage)
 }
 
 type session struct {
@@ -326,19 +329,33 @@ func (m *Manager) Resize(key string, cols, rows uint16) {
 	}
 }
 
+// Close ends a terminal and everything started in it (an agent, a dev
+// server, their helpers), not only the shell.
 func (m *Manager) Close(key string) {
+	if pids := m.detach(key); pids != nil {
+		go reap(pids, KillGrace)
+	}
+}
+
+// detach removes a session and closes its PTY. It returns the processes to
+// end, listed while the shell still holds them.
+func (m *Manager) detach(key string) []int {
 	m.mu.Lock()
 	s, ok := m.sessions[key]
 	delete(m.sessions, key)
 	m.mu.Unlock()
-	if ok {
-		_ = s.pty.Close()
-		if s.cmd.Process != nil {
-			_ = s.cmd.Process.Kill()
-		}
+	if !ok {
+		return nil
 	}
+	var pids []int
+	if s.cmd.Process != nil {
+		pids = tree(s.cmd.Process.Pid)
+	}
+	_ = s.pty.Close()
+	return pids
 }
 
+// CloseAll ends every terminal (Maestro is quitting) and waits for them.
 func (m *Manager) CloseAll() {
 	m.StopMonitor()
 	m.mu.Lock()
@@ -347,9 +364,13 @@ func (m *Manager) CloseAll() {
 		keys = append(keys, k)
 	}
 	m.mu.Unlock()
+	var groups [][]int
 	for _, k := range keys {
-		m.Close(k)
+		if pids := m.detach(k); pids != nil {
+			groups = append(groups, pids)
+		}
 	}
+	reapAll(groups, KillGrace)
 }
 
 // Open sessions, for the UI tab strip.

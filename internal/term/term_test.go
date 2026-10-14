@@ -1,8 +1,13 @@
 package term
 
 import (
+	"os"
+	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -177,4 +182,80 @@ func TestHistoryKeepsTheLatestOutput(t *testing.T) {
 	if len(s.hist) > 2*HistoryLimit || len(s.hist) < HistoryLimit || len(s.hist)%100 != 0 || end != int64((2*HistoryLimit/100+50)*100) {
 		t.Fatalf("kept %d bytes (must be whole lines, at most %d), end %d", len(s.hist), HistoryLimit, end)
 	}
+}
+
+// Closing a terminal ends what was started in it, also processes that
+// ignore the hangup or run in the background. Before, only the shell was
+// killed and agents / dev servers lived on under launchd.
+func TestCloseEndsEverythingStartedInTheTerminal(t *testing.T) {
+	t.Setenv("SHELL", "/bin/sh")
+	old := KillGrace
+	KillGrace = 300 * time.Millisecond
+	defer func() { KillGrace = old }()
+	pidFile := filepath.Join(t.TempDir(), "pids")
+	m := NewManager(Hooks{})
+	c := Context{Key: "PLAT-1", Dir: t.TempDir(),
+		// A background job, and a foreground child that ignores HUP and TERM.
+		Startup: []string{`sleep 300 & echo $! > ` + pidFile + `; sh -c 'trap "" HUP TERM; echo $$ >> ` + pidFile + `; while :; do sleep 1; done'`}}
+	if _, err := m.Open(c, 80, 24); err != nil {
+		t.Fatal(err)
+	}
+	var pids []int
+	deadline := time.Now().Add(3 * time.Second)
+	for len(pids) < 2 && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+		raw, _ := os.ReadFile(pidFile)
+		pids = pids[:0]
+		for _, f := range strings.Fields(string(raw)) {
+			if p, err := strconv.Atoi(f); err == nil {
+				pids = append(pids, p)
+			}
+		}
+	}
+	if len(pids) < 2 {
+		t.Fatalf("children never started: %v", pids)
+	}
+	m.CloseAll()
+	for _, p := range pids {
+		if syscall.Kill(p, 0) == nil && !zombie(p) {
+			_ = syscall.Kill(p, syscall.SIGKILL)
+			t.Fatalf("process %d outlived its terminal", p)
+		}
+	}
+}
+
+// Each terminal reports the memory of everything started in it.
+func TestUsageCountsTheWholeTerminal(t *testing.T) {
+	t.Setenv("SHELL", "/bin/sh")
+	old := UsageEvery
+	UsageEvery = 100 * time.Millisecond
+	defer func() { UsageEvery = old }()
+	var mu sync.Mutex
+	var last []Usage
+	m := NewManager(Hooks{OnUsage: func(u []Usage) { mu.Lock(); last = u; mu.Unlock() }})
+	defer m.CloseAll()
+	m.StartMonitor(DefaultNotifyOptions())
+	c := Context{Key: "PLAT-1", Dir: t.TempDir(), Startup: []string{"sleep 300 & sleep 300 & sleep 300"}}
+	if _, err := m.Open(c, 80, 24); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		mu.Lock()
+		u := slices.Clone(last)
+		mu.Unlock()
+		if len(u) == 1 && u[0].Procs >= 4 {
+			if u[0].Session != "PLAT-1" || u[0].Ticket != "PLAT-1" || u[0].Memory <= 0 {
+				t.Fatalf("usage = %+v", u[0])
+			}
+			for _, g := range u[0].Top {
+				if g.Command == "sleep" && g.Count == 3 && g.Memory > 0 {
+					return
+				}
+			}
+			t.Fatalf("sleep processes not grouped: %+v", u[0].Top)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("no usage with the shell and 3 sleeps: %+v", last)
 }

@@ -2,8 +2,8 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { api } from './api'
 import { EventsOn } from '../wailsjs/runtime/runtime'
 import { reportError } from './lib/errors'
-import type { Connection, FreeSession, GitHubStatus, CreateDefaults, CustomColumn, FieldPatch, SprintInfo, TermActivity, TermLightState, VersionInfo, Flow, FlowEvent, Issue, IssueType, Naming, NewIssue, Policy, QuickCommand, Rule, Settings, StepResult, User, View } from './types'
-import { isWork, setStatusStates } from './lib/util'
+import type { Connection, FreeSession, GitHubStatus, CreateDefaults, CustomColumn, FieldPatch, SprintInfo, TermActivity, TermLightState, TermUsage, VersionInfo, Flow, FlowEvent, Issue, IssueType, Naming, NewIssue, Policy, QuickCommand, Rule, Settings, StepResult, User, View } from './types'
+import { formatBytes, isWork, setStatusStates } from './lib/util'
 import { defaultNaming } from './lib/naming'
 import { chirp, loadMuted, saveMuted } from './lib/chirp'
 import { WindowSetTitle } from '../wailsjs/runtime/runtime'
@@ -46,6 +46,9 @@ interface Store {
   activeSession: string | null
   selectSession: (session: string) => void
   termActivity: Record<string, TermLightState>
+  /** Memory and CPU per terminal session, every few seconds. */
+  termUsage: Record<string, TermUsage>
+  memoryWarn: number
   chirpMuted: boolean
   setChirpMuted: (m: boolean) => void
   /** Opens (and by default focuses) the ticket's terminal. */
@@ -151,6 +154,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [termSessions, setTermSessions] = useState<string[]>([])
   const [activeSession, setActiveSession] = useState<string | null>(null)
   const [termActivity, setTermActivity] = useState<Record<string, TermLightState>>({})
+  const [termUsage, setTermUsage] = useState<Record<string, TermUsage>>({})
+  const [memoryWarn, setMemoryWarn] = useState(4 * 1024 ** 3)
+  const memoryWarnRef = useRef(memoryWarn)
+  memoryWarnRef.current = memoryWarn
+  const warnedRef = useRef(new Set<string>())
   const [chirpMuted, setChirpMutedState] = useState(loadMuted)
   const sessionsRef = useRef<string[]>([])
   sessionsRef.current = termSessions
@@ -187,6 +195,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (s.naming) setNaming(s.naming)
       setCommands(s.commands ?? [])
       if (s.policy) setPolicy(s.policy)
+      if (typeof s.memoryWarn === 'number') setMemoryWarn(s.memoryWarn)
       setLive(!!s.live)
       // Focus a ticket that exists: the deep link, else my first open work item.
       setFocusKey(k => {
@@ -276,6 +285,33 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     })
   }), [pushToast])
 
+  // Memory per terminal, with a warning (once until it drops back) when one
+  // terminal goes over the limit: a test run's workers, many agents…
+  useEffect(() => EventsOn('term:usage', (list: TermUsage[] | null) => {
+    const next: Record<string, TermUsage> = {}
+    for (const u of list ?? []) next[u.session] = u
+    setTermUsage(next)
+    const warn = memoryWarnRef.current
+    const warned = warnedRef.current
+    for (const k of warned) if (!next[k] || next[k].memory < warn * 0.8) warned.delete(k)
+    if (warn <= 0) return
+    for (const u of list ?? []) {
+      if (u.memory < warn || warned.has(u.session)) continue
+      warned.add(u.session)
+      const free = u.session.startsWith(FREE)
+      const label = free ? freeRef.current.find(f => f.id === u.session)?.name ?? 'Freestyle' : u.session.replace('#', ' #')
+      const top = (u.top ?? []).slice(0, 2).map(t => `${t.command}${t.count > 1 ? ` ×${t.count}` : ''} ${formatBytes(t.memory)}`).join(', ')
+      pushToast({
+        tone: 'error',
+        title: `${label} terminal is using ${formatBytes(u.memory)}`,
+        detail: `${u.procs} processes${top ? ` · ${top}` : ''}. Closing the tab ends them all.`,
+        onClick: free
+          ? () => { setView('freestyle'); setActiveFree(u.session); focusTerminalSoon(u.session) }
+          : () => { setActiveSession(u.session); setFocusKey(u.ticket); setTermOpen(true); focusTerminalSoon(u.session) },
+      })
+    }
+  }), [pushToast])
+
   // Seeing a freestyle terminal clears its "finished" light.
   useEffect(() => {
     if (view !== 'freestyle' || !activeFree) return
@@ -328,7 +364,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     view, setView, focusKey, setFocusKey,
     jiraKey, openJira: setJiraKey,
     paletteOpen, setPaletteOpen,
-    termOpen, setTermOpen, termSessions, activeSession, termActivity, chirpMuted,
+    termOpen, setTermOpen, termSessions, activeSession, termActivity, termUsage, memoryWarn, chirpMuted,
     setChirpMuted: m => { saveMuted(m); setChirpMutedState(m) },
     selectSession: session => { setActiveSession(session); setFocusKey(sessionTicket(session)); setTermOpen(true); focusTerminalSoon(session) },
     openTerminal: (ticket, opts) => {
@@ -431,7 +467,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     applySettings: st => { setNaming(st.naming); setCommands(st.terminal.commands ?? []) },
     copy: (text, label) => { api.copy(text); pushToast({ tone: 'dev', title: 'Copied to clipboard', detail: label ?? text }) },
     dismissToast: id => setToasts(ts => ts.filter(t => t.id !== id)),
-  }), [ready, me, issues, flows, statuses, rules, activity, toasts, users, sprint, childTypes, linkTypes, createDraft, connection, github, live, projects, sprints, versions, createDefaults, timeTracking, customColumns, view, focusKey, jiraKey, paletteOpen, termOpen, termSessions, activeSession, termActivity, chirpMuted, freeSessions, activeFree, setFreeSessions, guard, applyStep, pushToast, saveRules, naming, commands, policy, savePolicy])
+  }), [ready, me, issues, flows, statuses, rules, activity, toasts, users, sprint, childTypes, linkTypes, createDraft, connection, github, live, projects, sprints, versions, createDefaults, timeTracking, customColumns, view, focusKey, jiraKey, paletteOpen, termOpen, termSessions, activeSession, termActivity, termUsage, memoryWarn, chirpMuted, freeSessions, activeFree, setFreeSessions, guard, applyStep, pushToast, saveRules, naming, commands, policy, savePolicy])
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>
 }

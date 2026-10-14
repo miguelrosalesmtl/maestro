@@ -3,7 +3,7 @@ import { Plus, SquareDashedBottomCode, X } from 'lucide-react'
 import { useStore } from '../store'
 import { useAction } from '../keys'
 import { cx } from '../lib/util'
-import { TermLight, TermPane } from './TerminalDock'
+import { TermLight, TermMem, TermPane } from './TerminalDock'
 
 /**
  * Freestyle: terminals that belong to no ticket, for investigations and
@@ -11,7 +11,7 @@ import { TermLight, TermPane } from './TerminalDock'
  * and their git/gh commands never move a ticket.
  */
 export function FreestyleView({ shown }: { shown: boolean }) {
-  const { freeSessions, activeFree, selectFree, newFree, closeFree, renameFree, termActivity } = useStore()
+  const { freeSessions, activeFree, selectFree, newFree, closeFree, renameFree, termActivity, termUsage } = useStore()
   const [editing, setEditing] = useState<string | null>(null)
   const active = activeFree && freeSessions.some(f => f.id === activeFree) ? activeFree : freeSessions.at(-1)?.id ?? null
 
@@ -77,6 +77,7 @@ export function FreestyleView({ shown }: { shown: boolean }) {
                   <span className="free-name">{f.name}</span>
                 )}
                 {act && act.state !== 'idle' && act.command && <span className="tab-cmd">{act.command}</span>}
+                <TermMem usage={termUsage[f.id]} />
                 <button className="icon-btn" title="Close terminal (Ctrl+Shift+W)" onClick={e => { e.stopPropagation(); closeFree(f.id) }}><X size={12} /></button>
               </div>
             )

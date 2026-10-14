@@ -264,6 +264,9 @@ func validateTerminalAgentUI(c *collector, cfg *Config) {
 		}
 	}
 	envNames(c, "terminal.env", cfg.Terminal.Env)
+	if w := cfg.Terminal.MemoryWarnMB; w != nil && *w < 0 {
+		c.errorf("terminal.memoryWarnMB", "must be 0 (off) or more")
+	}
 	for k, p := range cfg.Terminal.Projects {
 		if !projectKey.MatchString(k) {
 			c.errorf("terminal.projects."+k, "%q is not a project key", k)

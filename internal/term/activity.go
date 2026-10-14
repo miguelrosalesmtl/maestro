@@ -96,6 +96,18 @@ func (m *Manager) StartMonitor(o NotifyOptions) {
 			}
 		}
 	}()
+	go func() {
+		t := time.NewTicker(UsageEvery)
+		defer t.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-t.C:
+				m.checkUsage()
+			}
+		}
+	}()
 }
 
 func (m *Manager) StopMonitor() {

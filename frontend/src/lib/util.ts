@@ -123,5 +123,18 @@ export function timeSince(iso: string): string {
 export function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`
-  return `${(n / 1024 / 1024).toFixed(1)} MB`
+  if (n < 1024 ** 3) return `${(n / 1024 / 1024).toFixed(1)} MB`
+  return `${(n / 1024 ** 3).toFixed(1)} GB`
+}
+
+/** Short memory figure for a tab: "340M", "1.2G". */
+export function formatMem(n: number): string {
+  if (n < 1024 ** 3) return `${Math.max(1, Math.round(n / 1024 ** 2))}M`
+  return `${(n / 1024 ** 3).toFixed(n < 10 * 1024 ** 3 ? 1 : 0)}G`
+}
+
+/** ok under half the warning, high up to it, over beyond (no warning: by size). */
+export function memTone(n: number, warn: number): 'ok' | 'high' | 'over' {
+  const limit = warn > 0 ? warn : 4 * 1024 ** 3
+  return n >= limit ? 'over' : n >= limit / 2 ? 'high' : 'ok'
 }

@@ -8,8 +8,8 @@ import { ChevronDown, ChevronUp, GitBranch, Plus, SquareTerminal, X } from 'luci
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { api } from '../api'
 import { sessionTicket, ticketLight, useStore } from '../store'
-import type { TermLightState } from '../types'
-import { cx, isWork, statusTone } from '../lib/util'
+import type { TermLightState, TermUsage } from '../types'
+import { cx, formatBytes, formatMem, isWork, memTone, statusTone } from '../lib/util'
 import { branchName, prCreateCommand, prMergeCommand } from '../lib/naming'
 import { StatusMenu, TypeIcon, isMac } from './bits'
 import { isAppShortcut, useAction } from '../keys'
@@ -157,7 +157,7 @@ function clampHeight(h: number, viewport: number) {
 const terminalHasFocus = () => !!document.activeElement?.closest('.xterm')
 
 export function TerminalDock() {
-  const { termOpen, setTermOpen, termSessions, activeSession, selectSession, openTerminal, closeTerminal, focusKey, issues, flows, termActivity, view, naming, commands } = useStore()
+  const { termOpen, setTermOpen, termSessions, activeSession, selectSession, openTerminal, closeTerminal, focusKey, issues, flows, termActivity, termUsage, view, naming, commands } = useStore()
   // Freestyle has its own full-size terminals and Settings needs the room:
   // the ticket dock steps aside (its shells keep running).
   const away = view === 'freestyle' || view === 'settings'
@@ -283,6 +283,7 @@ export function TerminalDock() {
                 <span className="mono">{t}</span>
                 {n && <span className="tab-n">#{n}</span>}
                 {act && act.state !== 'idle' && act.command && <span className="tab-cmd">{act.command}</span>}
+                <TermMem usage={termUsage[s]} />
                 <button className="icon-btn" title="Close terminal" onClick={e => { e.stopPropagation(); closeTerminal(s) }}><X size={11} /></button>
               </div>
             )
@@ -309,6 +310,7 @@ export function TerminalDock() {
                       <span className="mono">{t}</span>
                       <span className="om-sum">{issues[t]?.security ? '🔒 secured' : issues[t]?.summary}</span>
                       {ss.length > 1 && <span className="tab-n">×{ss.length}</span>}
+                      <TermMem usage={sumUsage(ss.map(x => termUsage[x]))} />
                     </button>
                   )
                 })}
@@ -317,6 +319,7 @@ export function TerminalDock() {
           </div>
         )}
         <span className="spacer" />
+        <MemTotal />
         <span className="muted small dock-hint">Ctrl+` · Ctrl+Shift+T new</span>
         <button className="icon-btn" onClick={() => setTermOpen(!termOpen)}>{termOpen ? <ChevronDown size={15} /> : <ChevronUp size={15} />}</button>
       </header>
@@ -356,6 +359,36 @@ export function TerminalDock() {
 }
 
 /** The activity light: waiting (amber, pulsing), running (cyan, spinning), finished (green), idle. */
+/** Adds up several terminals (a ticket's sessions). */
+function sumUsage(list: (TermUsage | undefined)[]): TermUsage | undefined {
+  const us = list.filter((u): u is TermUsage => !!u)
+  if (!us.length) return undefined
+  return { session: '', ticket: '', memory: us.reduce((n, u) => n + u.memory, 0), cpu: us.reduce((n, u) => n + u.cpu, 0), procs: us.reduce((n, u) => n + u.procs, 0), top: null }
+}
+
+/** What a terminal costs: its shell and everything started in it. */
+export function TermMem({ usage }: { usage?: TermUsage }) {
+  const { memoryWarn } = useStore()
+  if (!usage) return null
+  const tone = memTone(usage.memory, memoryWarn)
+  const lines = [`${formatBytes(usage.memory)} · ${usage.procs} process${usage.procs === 1 ? '' : 'es'} · ${Math.round(usage.cpu)}% CPU`]
+  for (const t of usage.top ?? []) lines.push(`${t.command}${t.count > 1 ? ` ×${t.count}` : ''}  ${formatBytes(t.memory)}`)
+  if (tone !== 'ok') lines.push('Closing the tab ends them all.')
+  return <span className={cx('tab-mem', `mem-${tone}`)} title={lines.join('\n')}>{formatMem(usage.memory)}</span>
+}
+
+/** All terminals together, in the dock header. */
+function MemTotal() {
+  const { termUsage, memoryWarn } = useStore()
+  const all = Object.values(termUsage)
+  if (!all.length) return null
+  const total = sumUsage(all)!
+  const heavy = [...all].sort((a, b) => b.memory - a.memory).slice(0, 3)
+  const title = [`Terminals: ${formatBytes(total.memory)} · ${total.procs} processes`,
+    ...heavy.map(u => `${u.session.startsWith('free:') ? 'Freestyle' : u.session.replace('#', ' #')}  ${formatBytes(u.memory)}`)].join('\n')
+  return <span className={cx('mem-total', `mem-${memTone(total.memory, memoryWarn * 2)}`)} title={title}>{formatMem(total.memory)} in terminals</span>
+}
+
 export function TermLight({ light, fallbackTone, size = 8 }: { light: TermLightState; fallbackTone?: string; size?: number }) {
   if (light.state === 'idle') return <span className={cx('dot', fallbackTone ? `tone-${fallbackTone}` : 'term-idle')} />
   return <span className={cx('term-light', `tl-${light.state}`)} style={{ width: size, height: size }} />

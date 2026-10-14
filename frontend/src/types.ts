@@ -278,6 +278,18 @@ export interface Snapshot {
   naming: Naming
   commands: QuickCommand[]
   policy: Policy
+  /** Warn when one terminal uses more bytes than this (0 = off). */
+  memoryWarn: number
+}
+
+/** What one terminal costs: its shell and everything started in it (backend term.Usage). */
+export interface TermUsage {
+  session: string
+  ticket: string
+  memory: number // bytes; on macOS what Activity Monitor shows
+  cpu: number // percent of one core
+  procs: number
+  top: { command: string; count: number; memory: number }[] | null
 }
 
 /**

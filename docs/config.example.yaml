@@ -152,6 +152,7 @@ terminal:
   # shell: zsh                                   # default: your login shell ($SHELL)
   # env: { AWS_PROFILE: dev }                    # every terminal (MAESTRO_* are Maestro's)
   # startup: ["nvm use"]                         # typed into every new terminal
+  # memoryWarnMB: 4096                           # warn when one terminal (and all it started) uses more; 0 = off
   # commands:                                    # extra one-click buttons above the ticket terminal
   #   - { label: test, command: "make test" }
   # projects:                                    # per project, on top of the above

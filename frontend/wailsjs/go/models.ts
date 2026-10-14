@@ -369,6 +369,7 @@ export namespace config {
 	    Watch: string[];
 	    Notify: TerminalNotify;
 	    Projects: Record<string, ProjectTerminal>;
+	    MemoryWarnMB?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new Terminal(source);
@@ -383,6 +384,7 @@ export namespace config {
 	        this.Watch = source["Watch"];
 	        this.Notify = this.convertValues(source["Notify"], TerminalNotify);
 	        this.Projects = this.convertValues(source["Projects"], ProjectTerminal, true);
+	        this.MemoryWarnMB = source["MemoryWarnMB"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1545,6 +1547,7 @@ export namespace main {
 	    naming: flow.Naming;
 	    commands: config.QuickCommand[];
 	    policy: flow.Policy;
+	    memoryWarn: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new Snapshot(source);
@@ -1573,6 +1576,7 @@ export namespace main {
 	        this.naming = this.convertValues(source["naming"], flow.Naming);
 	        this.commands = this.convertValues(source["commands"], config.QuickCommand);
 	        this.policy = this.convertValues(source["policy"], flow.Policy);
+	        this.memoryWarn = source["memoryWarn"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
