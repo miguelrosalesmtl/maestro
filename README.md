@@ -11,41 +11,46 @@ merge move the Jira status for you — with a real terminal bound to each ticket
 ## Install and try it
 
 You need: a Jira site where you can create an API token, and (for pull requests) a GitHub
-account with access to your repositories. The one-time Jira login uses the `maestro-jira`
-command-line tool, which is not in the download yet, so Go is needed for that step.
+account with access to your repositories. Each release has two downloads per platform: the
+**Maestro** app and **maestro-jira**, the small command-line tool for the one-time Jira login.
 
 ### macOS
 
-**1. Get the app.** Every push builds a universal app (Apple Silicon and Intel).
-
-- In the browser: [Actions](https://github.com/miguelrosalesmtl/maestro/actions) → the latest
-  green **build** run → *Artifacts* → **Maestro-macos-universal**, or
-- with the GitHub CLI: `gh run download -R miguelrosalesmtl/maestro -n Maestro-macos-universal`
-  (latest run).
+**1. Get the app and the login tool** from the latest
+[Release](https://github.com/miguelrosalesmtl/maestro/releases/latest):
+`Maestro-macos-universal.zip` and `maestro-jira-macos-universal.zip` (both run on Apple Silicon
+and Intel). Or with the GitHub CLI:
 
 ```sh
-unzip Maestro-macos-universal.zip            # skip if the browser already unzipped it
-mv Maestro.app /Applications/
-xattr -dr com.apple.quarantine /Applications/Maestro.app
+gh release download -R miguelrosalesmtl/maestro -p '*macos*'
 ```
 
-The app is not signed yet. Without the `xattr` line, macOS says it "can't be opened"; you can
-also right-click the app → **Open** → **Open** once. Downloads from Actions expire after 90 days.
+```sh
+unzip Maestro-macos-universal.zip && unzip maestro-jira-macos-universal.zip   # skip what the browser unzipped
+mv Maestro.app /Applications/
+sudo mv maestro-jira /usr/local/bin/
+xattr -dr com.apple.quarantine /Applications/Maestro.app /usr/local/bin/maestro-jira
+```
 
-**2. Install the tools and get the code** (for the login tool):
+Builds are not signed by Apple yet, so the `xattr` line is needed; without it macOS says the app
+"can't be opened" (or: try to open it once, then System Settings → Privacy & Security →
+**Open Anyway**). Once the release workflow has a Developer ID certificate, builds are signed and
+notarized and this step goes away. Between releases, every push to `main` also builds both
+downloads: [Actions](https://github.com/miguelrosalesmtl/maestro/actions) → latest green
+**build** run → *Artifacts* (needs a GitHub login; kept 90 days).
+
+**2. Sign in to GitHub** so Maestro can read your pull requests:
 
 ```sh
-brew install go gh
-gh auth login                                # lets Maestro read your pull requests
-git clone https://github.com/miguelrosalesmtl/maestro.git
-cd maestro
+brew install gh
+gh auth login
 ```
 
 **3. Connect Jira** (once):
 
 ```sh
-go run ./cmd/maestro-jira login              # asks for your site, email and API token
-go run ./cmd/maestro-jira discover -apply    # reads your projects, statuses and fields into the config
+maestro-jira login              # asks for your site, email and API token
+maestro-jira discover -apply    # reads your projects, statuses and fields into the config
 ```
 
 For Jira Cloud, create the token at
@@ -68,27 +73,31 @@ projects:
 Then check everything:
 
 ```sh
-go run ./cmd/maestro-jira check              # Jira token, permissions, config vs. Jira, GitHub, each repo
+maestro-jira check              # Jira token, permissions, config vs. Jira, GitHub, each repo
 ```
 
 **5. Open Maestro** from Applications. The sidebar shows **Jira · your-site** and
 **GitHub · @you** (or says why one is not connected). Logs are in `~/Library/Logs/Maestro/`.
 
-To update later: download the newest build, replace `/Applications/Maestro.app`, and run the
-`xattr` line again. Your config and Keychain token stay.
+To update later: download the newest release, replace `/Applications/Maestro.app` and
+`maestro-jira`, and run the `xattr` line again. Your config and Keychain token stay.
+`maestro-jira version` shows which release you have.
 
 ### Linux
 
-Download **Maestro-linux-amd64** from the same Actions run (or build it: see
-[Develop](#develop)). It needs GTK 3 and WebKitGTK 4.1:
+Download `Maestro-linux-amd64.tar.gz` and `maestro-jira-linux-amd64.tar.gz` from the same
+[Release](https://github.com/miguelrosalesmtl/maestro/releases/latest) (or build them: see
+[Develop](#develop)). The app needs GTK 3 and WebKitGTK 4.1:
 
 ```sh
 sudo pacman -S gtk3 webkit2gtk-4.1                     # Arch / Omarchy
 sudo apt install libgtk-3-0 libwebkit2gtk-4.1-0        # Debian / Ubuntu
-tar -xzf Maestro-linux-amd64.tar.gz && ./maestro
+tar -xzf Maestro-linux-amd64.tar.gz && tar -xzf maestro-jira-linux-amd64.tar.gz
+./maestro-jira login && ./maestro-jira discover -apply
+./maestro
 ```
 
-Steps 2–4 are the same as on macOS (`go` and `gh` from your package manager). The config is in
+Steps 2–4 are the same as on macOS (`gh` from your package manager). The config is in
 `~/.config/maestro/config.yaml`, the token in the Secret Service keyring (GNOME Keyring,
 KWallet…), and logs in `~/.local/state/maestro/logs/`.
 
@@ -138,10 +147,10 @@ ASD-STE100 Simplified Technical English.
 ### Connecting to Jira
 
 ```sh
-go run ./cmd/maestro-jira login              # site + API token → keychain, writes config.yaml
-go run ./cmd/maestro-jira check              # validates config, tests the token and permissions
-go run ./cmd/maestro-jira discover           # shows what Maestro would configure
-go run ./cmd/maestro-jira discover -apply    # …and saves it
+maestro-jira login              # site + API token → keychain, writes config.yaml
+maestro-jira check              # validates config, tests the token and permissions
+maestro-jira discover           # shows what Maestro would configure
+maestro-jira discover -apply    # …and saves it
 ```
 
 Then restart Maestro: the sidebar shows a green **Jira · your-site** dot and your real issues.
@@ -234,7 +243,7 @@ With Jira connected, Maestro follows the pull requests of every repository in
 
 Sign-in uses the GitHub CLI by default (`gh auth login`; the token is read from `gh` on every
 call, never stored by Maestro). Without `gh`, store a fine-grained token (read access to pull
-requests, checks, commit statuses and contents) with `go run ./cmd/maestro-jira github-login`
+requests, checks, commit statuses and contents) with `maestro-jira github-login`
 and set `dev.github.auth: token`. `maestro-jira check` tests the sign-in and each repository.
 The sidebar shows `GitHub · @you`, or why it is not connected.
 
@@ -261,7 +270,7 @@ jq 'select(.level=="ERROR")' ~/.local/state/maestro/logs/maestro.log    # errors
 
 ## Develop
 
-Requires Go 1.25+, Node 20+, and the Wails CLI:
+Requires Go 1.26+, Node 22.6+ (the frontend tests use `--experimental-strip-types`), and the Wails CLI:
 
 ```sh
 go install github.com/wailsapp/wails/v2/cmd/wails@v2.16.0
@@ -279,8 +288,19 @@ Linux needs `webkit2gtk-4.1` (the Makefile adds `-tags webkit2_41` automatically
 - **macOS** universal (`Maestro.app`, zipped) on `macos-latest`
 - **Linux** amd64 binary
 
-Download them from the run's *Artifacts* (see [Install and try it](#install-and-try-it)).
-Pushing a `v*` tag also creates a GitHub Release.
+Each build also includes `maestro-jira` for both platforms. Download them from the run's
+*Artifacts*. Pushing a `v*` tag (`git tag v0.1.0 && git push origin v0.1.0`) stamps that version
+into both programs and publishes a GitHub Release with all four downloads and `SHA256SUMS`.
+
+To sign and notarize the macOS builds, add these repository secrets (Settings → Secrets and
+variables → Actions); without them the builds are unsigned:
+
+| Secret | |
+|---|---|
+| `MACOS_CERT_P12` | *Developer ID Application* certificate + key, exported as .p12, base64 (`base64 -i cert.p12 \| pbcopy`) |
+| `MACOS_CERT_PASSWORD` | the .p12 export password |
+| `APPLE_ID`, `APPLE_TEAM_ID` | the Apple Developer account and its team ID |
+| `APPLE_APP_PASSWORD` | an app-specific password from appleid.apple.com, for notarization |
 
 ## Layout
 

@@ -25,20 +25,63 @@ jobs:
   macos:
     needs: test
     runs-on: macos-latest
+    env:
+      # Optional. Without them the app is built unsigned (see README, "Install").
+      MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}           # Developer ID Application cert, base64 .p12
+      MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}   # app-specific password, for notarization
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
         with: { go-version-file: go.mod }
       - uses: actions/setup-node@v5
         with: { node-version: 22 }
+      - name: Version
+        run: echo "VERSION=$(if [[ $GITHUB_REF == refs/tags/v* ]]; then echo ${GITHUB_REF_NAME#v}; else echo dev-${GITHUB_SHA::7}; fi)" >> $GITHUB_ENV
       - run: go install github.com/wailsapp/wails/v2/cmd/wails@${WAILS_VERSION}
-      - run: wails build -platform darwin/universal -clean
-      - name: Zip app bundle
-        run: ditto -c -k --keepParent build/bin/Maestro.app Maestro-macos-universal.zip
+      - run: wails build -platform darwin/universal -clean -ldflags "-X main.version=$VERSION"
+      - name: maestro-jira (universal)
+        run: |
+          for arch in arm64 amd64; do
+            CGO_ENABLED=0 GOARCH=$arch go build -trimpath -ldflags "-X maestro/internal/setup.Version=$VERSION" -o maestro-jira-$arch ./cmd/maestro-jira
+          done
+          lipo -create -output maestro-jira maestro-jira-arm64 maestro-jira-amd64
+      - name: Sign
+        if: env.MACOS_CERT_P12 != ''
+        run: |
+          KC=$RUNNER_TEMP/build.keychain-db KP=$(uuidgen)
+          echo "$MACOS_CERT_P12" | base64 --decode > $RUNNER_TEMP/cert.p12
+          security create-keychain -p "$KP" $KC
+          security set-keychain-settings -lut 3600 $KC
+          security unlock-keychain -p "$KP" $KC
+          security import $RUNNER_TEMP/cert.p12 -k $KC -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -k "$KP" $KC
+          security list-keychains -d user -s $KC $(security list-keychains -d user | tr -d '"')
+          ID=$(security find-identity -v -p codesigning $KC | grep -m1 "Developer ID Application" | awk '{print $2}')
+          codesign --force --options runtime --timestamp --sign "$ID" maestro-jira
+          codesign --force --deep --options runtime --timestamp --sign "$ID" build/bin/Maestro.app
+          codesign --verify --strict --verbose=2 build/bin/Maestro.app
+      - name: Package
+        run: |
+          ditto -c -k --keepParent build/bin/Maestro.app Maestro-macos-universal.zip
+          ditto -c -k maestro-jira maestro-jira-macos-universal.zip
+      - name: Notarize
+        if: env.MACOS_CERT_P12 != '' && env.APPLE_ID != ''
+        run: |
+          for z in Maestro-macos-universal.zip maestro-jira-macos-universal.zip; do
+            xcrun notarytool submit $z --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+          done
+          xcrun stapler staple build/bin/Maestro.app
+          rm Maestro-macos-universal.zip
+          ditto -c -k --keepParent build/bin/Maestro.app Maestro-macos-universal.zip
       - uses: actions/upload-artifact@v6
         with:
           name: Maestro-macos-universal
-          path: Maestro-macos-universal.zip
+          path: |
+            Maestro-macos-universal.zip
+            maestro-jira-macos-universal.zip
 
   linux:
     needs: test
@@ -49,19 +92,27 @@ jobs:
         with: { go-version-file: go.mod }
       - uses: actions/setup-node@v5
         with: { node-version: 22 }
+      - name: Version
+        run: echo "VERSION=$(if [[ $GITHUB_REF == refs/tags/v* ]]; then echo ${GITHUB_REF_NAME#v}; else echo dev-${GITHUB_SHA::7}; fi)" >> $GITHUB_ENV
       - run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
       - run: go install github.com/wailsapp/wails/v2/cmd/wails@${WAILS_VERSION}
-      - run: wails build -tags webkit2_41 -clean
+      - run: wails build -tags webkit2_41 -clean -ldflags "-X main.version=$VERSION"
       - name: App tests (end-to-end against a fake Jira)
         run: go test -tags webkit2_41 -count=1 .
       - name: Frontend tests
         run: npm test
         working-directory: frontend
-      - run: tar -czf Maestro-linux-amd64.tar.gz -C build/bin maestro
+      - name: maestro-jira
+        run: CGO_ENABLED=0 go build -trimpath -ldflags "-X maestro/internal/setup.Version=$VERSION" -o build/bin/maestro-jira ./cmd/maestro-jira
+      - run: |
+          tar -czf Maestro-linux-amd64.tar.gz -C build/bin maestro
+          tar -czf maestro-jira-linux-amd64.tar.gz -C build/bin maestro-jira
       - uses: actions/upload-artifact@v6
         with:
           name: Maestro-linux-amd64
-          path: Maestro-linux-amd64.tar.gz
+          path: |
+            Maestro-linux-amd64.tar.gz
+            maestro-jira-linux-amd64.tar.gz
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -70,8 +121,13 @@ jobs:
     steps:
       - uses: actions/download-artifact@v6
         with: { merge-multiple: true }
+      - run: sha256sum *.zip *.tar.gz > SHA256SUMS
       - uses: softprops/action-gh-release@v2
         with:
+          generate_release_notes: true
           files: |
             Maestro-macos-universal.zip
+            maestro-jira-macos-universal.zip
             Maestro-linux-amd64.tar.gz
+            maestro-jira-linux-amd64.tar.gz
+            SHA256SUMS

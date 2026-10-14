@@ -8,6 +8,7 @@ import { activeStage, cx, isContainer, isWork, statusTone, timeAgo } from '../li
 import { visibleKeys } from '../lib/tree'
 import { Avatar, Kbd, TypeIcon, modKey } from './bits'
 import { TicketTermLight } from './TerminalDock'
+import { workspaceName } from '../lib/workspace'
 
 const NAV: { id: View; label: string; short: string; icon: typeof Crosshair; action: string }[] = [
   { id: 'mine', label: 'My work', short: 'Mine', icon: Inbox, action: 'nav.mine' },
@@ -106,7 +107,7 @@ export function Sidebar() {
   const [mine, setMine] = useState(true)
   const conn = useConnection()
   const gh = useGitHub()
-  const { live } = useStore()
+  const { live, connection } = useStore()
   const { pushToast } = useStore()
   const [refreshing, setRefreshing] = useState(false)
   const refresh = useCallback(async () => {
@@ -207,7 +208,7 @@ export function Sidebar() {
       <SidebarGrip />
       <div className="sidebar-head drag">
         <div className="workspace">
-          <div className="ws-name">Acme Engineering</div>
+          <div className="ws-name" title={connection?.site || undefined}>{workspaceName(connection)}</div>
           <div className={cx('ws-sub', `conn-${conn.state}`)} title={conn.hint}>
             <span className="conn-dot" /> {conn.label}
             {(conn.state === 'none' || (conn.state === 'error' && !live)) && <span className="mock-tag">demo data</span>}
@@ -288,5 +289,5 @@ function useConnection(): { state: ConnState; label: string; hint: string } {
     return { state: 'live', label: `Jira · ${c.site}`, hint: `Live data from Jira (${c.issues} issues${when})` }
   }
   if (c.configured) return { state: 'error', label: `${c.site} · not connected`, hint: (c.error ?? 'Could not connect') + ' — showing sample tickets.' }
-  return { state: 'none', label: 'Jira not connected', hint: 'Showing sample tickets. Connect with: go run ./cmd/maestro-jira login' }
+  return { state: 'none', label: 'Jira not connected', hint: 'Showing sample tickets. Connect with: maestro-jira login' }
 }

@@ -43,6 +43,7 @@ func main() {
 	cmds := map[string]func(context.Context, []string) error{
 		"detect": detect, "login": login, "check": check, "discover": discover, "logout": logout,
 		"github-login": githubLogin,
+		"version": func(context.Context, []string) error { fmt.Println("maestro-jira", setup.Version); return nil },
 	}
 	run, ok := cmds[os.Args[1]]
 	if !ok {
@@ -56,7 +57,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: maestro-jira <login|check|discover|detect|logout|github-login> [flags]")
+	fmt.Fprintln(os.Stderr, "usage: maestro-jira <login|check|discover|detect|logout|github-login|version> [flags]")
 }
 
 // explain turns typed errors into the messages the spec asks for.
