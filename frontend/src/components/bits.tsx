@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { Bookmark, Bug, CheckSquare, ChevronDown, Crown, Zap, ArrowUp, ArrowDown, ChevronsUp, Equal } from 'lucide-react'
 import type { IssueType, User } from '../types'
 import { cx, statusTone } from '../lib/util'
@@ -46,7 +47,9 @@ export function StatusMenu({ issueKey, variant = 'pill' }: { issueKey: string; v
   const [open, setOpen] = useState(false)
   const [targets, setTargets] = useState<string[] | null>(null) // null = loading
   const ref = useRef<HTMLDivElement>(null)
-  useOutside(ref, () => setOpen(false))
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [pos, setPos] = useState<CSSProperties | null>(null)
+  useOutside(ref, () => setOpen(false), menuRef)
   useEffect(() => {
     if (!open) return
     setTargets(null)
@@ -56,6 +59,26 @@ export function StatusMenu({ issueKey, variant = 'pill' }: { issueKey: string; v
       .catch(() => { if (alive) setTargets(statuses.filter(s => s !== issue?.status)) })
     return () => { alive = false }
   }, [open, issueKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  // The menu lives on <body> (fixed), so cards with overflow: hidden and
+  // scrolling lists cannot cut it off. It opens upward when there is more room.
+  useLayoutEffect(() => {
+    if (!open) return
+    const place = () => {
+      const r = ref.current?.getBoundingClientRect()
+      if (!r) return
+      const below = window.innerHeight - r.bottom - 12, above = r.top - 12
+      const up = below < 220 && above > below
+      const left = Math.max(8, Math.min(r.left, window.innerWidth - 220))
+      setPos(up
+        ? { left, bottom: window.innerHeight - r.top + 6, maxHeight: above - 6 }
+        : { left, top: r.bottom + 6, maxHeight: below - 6 })
+    }
+    place()
+    const close = (e: Event) => { if (!menuRef.current?.contains(e.target as Node)) setOpen(false) }
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', close, true) // the button moved: close rather than float away
+    return () => { window.removeEventListener('resize', place); window.removeEventListener('scroll', close, true) }
+  }, [open])
   if (!issue) return null
   return (
     <div className="status-menu" ref={ref}>
@@ -63,8 +86,8 @@ export function StatusMenu({ issueKey, variant = 'pill' }: { issueKey: string; v
         onClick={e => { e.stopPropagation(); setOpen(o => !o) }}>
         {variant === 'pill' && <i />}{issue.status}<ChevronDown size={13} />
       </button>
-      {open && (
-        <div className="menu pop-in" onClick={e => e.stopPropagation()}>
+      {open && pos && createPortal(
+        <div className="menu menu-fixed pop-in" ref={menuRef} style={pos} onClick={e => e.stopPropagation()}>
           <div className="menu-label">Transition to</div>
           {targets === null && <div className="menu-label">Loading…</div>}
           {targets?.length === 0 && <div className="menu-label">No transitions available</div>}
@@ -73,18 +96,23 @@ export function StatusMenu({ issueKey, variant = 'pill' }: { issueKey: string; v
               <StatusPill status={s} small />
             </button>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   )
 }
 
-export function useOutside(ref: React.RefObject<HTMLElement | null>, cb: () => void) {
+/** Calls cb on a mouse press outside ref (and outside also, e.g. a portaled menu). */
+export function useOutside(ref: React.RefObject<HTMLElement | null>, cb: () => void, also?: React.RefObject<HTMLElement | null>) {
   useEffect(() => {
-    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) cb() }
+    const h = (e: MouseEvent) => {
+      const t = e.target as Node
+      if (ref.current && !ref.current.contains(t) && !also?.current?.contains(t)) cb()
+    }
     document.addEventListener('mousedown', h)
     return () => document.removeEventListener('mousedown', h)
-  }, [ref, cb])
+  }, [ref, cb, also])
 }
 
 export function Kbd({ children }: { children: ReactNode }) {

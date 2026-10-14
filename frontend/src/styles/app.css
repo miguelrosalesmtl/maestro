@@ -257,6 +257,7 @@ html.mac .sidebar-head { padding-top: 30px; }
   box-shadow: 0 20px 50px -10px rgba(0,0,0,.7);
 }
 .menu-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em; color: var(--text-3); padding: 4px 8px 6px; }
+.menu-fixed { position: fixed; top: auto; z-index: 1000; overflow-y: auto; }
 .menu-item { display: flex; width: 100%; padding: 6px 8px; border-radius: 8px; }
 .menu-item:hover { background: var(--surface-2); }
 
