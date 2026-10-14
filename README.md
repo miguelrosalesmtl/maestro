@@ -278,7 +278,9 @@ Sign-in uses the GitHub CLI by default (`gh auth login`; the token is read from 
 call, never stored by Maestro). Without `gh`, store a fine-grained token (read access to pull
 requests, checks, commit statuses and contents) with `maestro-jira github-login`
 and set `dev.github.auth: token`. `maestro-jira check` tests the sign-in and each repository.
-The sidebar shows `GitHub · @you`, or why it is not connected.
+The sidebar shows `GitHub · @you`, or why it is not connected. Opened from the Dock or Finder, Maestro
+takes the PATH of your login shell (plus `/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin`), so
+`gh` from Homebrew, mise, asdf etc. is found as in a terminal.
 
 ## Logs and crashes
 

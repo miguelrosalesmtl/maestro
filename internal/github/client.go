@@ -16,7 +16,9 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"net/url"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -75,7 +77,8 @@ func (g GHCLI) Token(ctx context.Context) (secrets.Secret, error) {
 	out, err := exec.CommandContext(ctx, "gh", "auth", "token", "--hostname", host).Output()
 	if err != nil {
 		if errors.Is(err, exec.ErrNotFound) {
-			return "", fmt.Errorf("%w: the GitHub CLI (gh) is not installed; install it or use dev.github.auth: token", ErrUnauthorized)
+			return "", fmt.Errorf("%w: the GitHub CLI (gh) was not found on PATH (searched %s); install it, or set dev.github.auth: token",
+				ErrUnauthorized, strings.Join(filepath.SplitList(os.Getenv("PATH")), ", "))
 		}
 		return "", fmt.Errorf("%w: run `gh auth login --hostname %s`", ErrUnauthorized, host)
 	}

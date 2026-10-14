@@ -10,6 +10,7 @@ import (
 
 	"maestro/internal/applog"
 	"maestro/internal/config"
+	"maestro/internal/envpath"
 	"maestro/internal/setup"
 
 	"github.com/wailsapp/wails/v2"
@@ -35,6 +36,9 @@ func main() {
 		defer logs.Close()
 	}
 	setup.Version = version
+	// Opened from the Dock / Finder: take the login shell's PATH so gh, git
+	// from Homebrew etc. are found (issue #5).
+	envpath.Fix(slog.Default())
 	cfg, layers := loadConfig(logs)
 
 	// WebKitGTK's DMA-BUF renderer is flaky on Wayland compositors (crashes in
