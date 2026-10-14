@@ -171,10 +171,10 @@ func TestHistoryKeepsTheLatestOutput(t *testing.T) {
 	s := &session{}
 	line := strings.Repeat("x", 99) + "\n"
 	var end int64
-	for range HistoryLimit/100 + 50 {
+	for range 2*HistoryLimit/100 + 50 {
 		end = s.record([]byte(line))
 	}
-	if len(s.hist) > HistoryLimit || len(s.hist)%100 != 0 || end != int64((HistoryLimit/100+50)*100) {
+	if len(s.hist) > 2*HistoryLimit || len(s.hist) < HistoryLimit || len(s.hist)%100 != 0 || end != int64((2*HistoryLimit/100+50)*100) {
 		t.Fatalf("kept %d bytes (must be whole lines, at most %d), end %d", len(s.hist), HistoryLimit, end)
 	}
 }

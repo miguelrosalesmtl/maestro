@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { Terminal as XTerm } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
+import { WebglAddon } from '@xterm/addon-webgl'
 import '@xterm/xterm/css/xterm.css'
 import { ChevronDown, ChevronUp, GitBranch, Plus, SquareTerminal, X } from 'lucide-react'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
@@ -10,7 +11,7 @@ import { sessionTicket, ticketLight, useStore } from '../store'
 import type { TermLightState } from '../types'
 import { cx, isWork, statusTone } from '../lib/util'
 import { branchName, prCreateCommand, prMergeCommand } from '../lib/naming'
-import { StatusMenu, TypeIcon } from './bits'
+import { StatusMenu, TypeIcon, isMac } from './bits'
 import { isAppShortcut, useAction } from '../keys'
 import { reportError } from '../lib/errors'
 
@@ -75,6 +76,17 @@ export const TermPane = memo(function TermPane({ session, active, banner }: { se
     term.loadAddon(fit)
     term.loadAddon(new WebLinksAddon((_, uri) => api.openURL(uri)))
     term.open(host.current!)
+    // macOS: draw on the GPU. The DOM renderer rebuilds elements on every
+    // redraw, which busy programs (AI agents' screens) make costly. If the GPU
+    // context is lost (too many terminals, sleep), fall back to the DOM renderer.
+    // Not on Linux: WebKitGTK's GPU path is unreliable on Wayland compositors.
+    if (isMac) {
+      try {
+        const gl = new WebglAddon()
+        gl.onContextLoss(() => gl.dispose())
+        term.loadAddon(gl)
+      } catch (err) { reportError('info', err, 'terminal webgl') }
+    }
     safeFit()
 
     // Output is numbered by its end offset. A pane recreated while its shell

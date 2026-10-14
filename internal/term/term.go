@@ -144,6 +144,43 @@ func (m *Manager) Open(c Context, cols, rows uint16) (bool, error) {
 		}()
 	}
 
+	// Output is batched for a few milliseconds before it goes to the UI:
+	// programs that redraw their screen (AI agents, progress bars) write in
+	// many tiny pieces, and one message per piece costs CPU on both sides.
+	var (
+		pendMu  sync.Mutex
+		pending []byte
+	)
+	wake := make(chan struct{}, 1)
+	emitted := make(chan struct{})
+	go func() {
+		defer close(emitted)
+		defer applog.Recover("terminal output " + c.Session)
+		flush := func() {
+			pendMu.Lock()
+			chunk := pending
+			pending = nil
+			pendMu.Unlock()
+			if len(chunk) == 0 {
+				return
+			}
+			end := s.record(chunk)
+			if m.hooks.OnData != nil {
+				m.hooks.OnData(c.Session, chunk, end)
+			}
+		}
+		for range wake {
+			pendMu.Lock()
+			small := len(pending) < 64<<10
+			pendMu.Unlock()
+			if small {
+				time.Sleep(OutputBatch)
+			}
+			flush()
+		}
+		flush()
+	}()
+
 	go func() {
 		defer applog.Recover("terminal " + c.Session)
 		buf := make([]byte, 32*1024)
@@ -151,18 +188,20 @@ func (m *Manager) Open(c Context, cols, rows uint16) (bool, error) {
 			n, err := f.Read(buf)
 			if n > 0 {
 				s.lastOutput.Store(time.Now().UnixNano())
-			}
-			if n > 0 {
-				chunk := append([]byte(nil), buf[:n]...)
-				end := s.record(chunk)
-				if m.hooks.OnData != nil {
-					m.hooks.OnData(c.Session, chunk, end)
+				pendMu.Lock()
+				pending = append(pending, buf[:n]...)
+				pendMu.Unlock()
+				select {
+				case wake <- struct{}{}:
+				default: // a flush is already due
 				}
 			}
 			if err != nil {
 				break
 			}
 		}
+		close(wake)
+		<-emitted // all output reaches the UI before the exit does
 		werr := cmd.Wait()
 		code := 0
 		if cmd.ProcessState != nil {
@@ -181,21 +220,31 @@ func (m *Manager) Open(c Context, cols, rows uint16) (bool, error) {
 	return true, nil
 }
 
-// HistoryLimit is how much recent output each session keeps for History.
+// OutputBatch is how long output is collected before it is sent to the UI.
+const OutputBatch = 4 * time.Millisecond
+
+// HistoryLimit is how much recent output each session keeps for History
+// (between one and two times this much, so trimming is rare and allocates nothing).
 const HistoryLimit = 512 << 10
 
 // record keeps chunk in the session's history and returns the output length after it.
 func (s *session) record(chunk []byte) int64 {
 	s.histMu.Lock()
 	defer s.histMu.Unlock()
+	if s.hist == nil {
+		s.hist = make([]byte, 0, 2*HistoryLimit+32<<10)
+	}
 	s.hist = append(s.hist, chunk...)
-	if len(s.hist) > HistoryLimit {
+	// Trim once twice the limit is reached, in place: a busy program (an AI
+	// agent's screen redraws) writes many small chunks, and copying the whole
+	// history for each of them would burn CPU and memory.
+	if len(s.hist) > 2*HistoryLimit {
 		cut := len(s.hist) - HistoryLimit
 		// Start on a line, not in the middle of an escape sequence.
 		if i := bytes.IndexByte(s.hist[cut:], '\n'); i >= 0 && i < 4096 {
 			cut += i + 1
 		}
-		s.hist = append([]byte(nil), s.hist[cut:]...)
+		s.hist = s.hist[:copy(s.hist, s.hist[cut:])]
 	}
 	s.total += int64(len(chunk))
 	return s.total
