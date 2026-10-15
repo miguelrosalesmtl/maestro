@@ -624,8 +624,18 @@ body.resizing * { pointer-events: none; }
 .ctx-chip::before { content: '$ '; opacity: .5; }
 .ctx-chip:hover { background: rgba(34,211,238,.16); border-color: var(--accent-2); }
 .dock-body { flex: 1; min-height: 0; position: relative; background: #0b0b11; }
-.term-pane { position: absolute; inset: 6px 4px 4px 14px; display: none; }
+/* clip, not hidden: text being composed (macOS dictation, IME) must never
+   scroll the page sideways to keep its caret in view. */
+.term-pane { position: absolute; inset: 6px 4px 4px 14px; display: none; overflow: clip; }
 .term-pane.active { display: block; }
+/* xterm shows composing text on one line that grows past the terminal;
+   wrap it inside the terminal instead (xterm sets left/top/height inline). */
+.term-pane .xterm .composition-view {
+  right: 0; height: auto !important; white-space: pre-wrap; overflow-wrap: anywhere;
+  background: #1c1c26; color: var(--text); border-radius: 3px;
+}
+.term-pane .xterm .xterm-helpers { left: 0; right: 0; }
+.term-pane .xterm .xterm-helper-textarea { max-width: 100%; }
 .term-pane .xterm, .term-pane .xterm-viewport { background: transparent !important; }
 .term-pane .xterm-viewport::-webkit-scrollbar { width: 8px; }
 .term-pane .xterm-viewport::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 8px; }
