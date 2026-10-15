@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"time"
 
 	"maestro/internal/tracker/jira"
@@ -136,9 +137,23 @@ func (t *Tracker) incrementalSync(ctx context.Context) error {
 		change.Issues = append(change.Issues, e.issue)
 	}
 	if len(change.Issues) > 0 {
+		before := make(map[string][]string, len(t.issues))
+		for k, e := range t.issues {
+			before[k] = e.issue.ChildKeys
+		}
 		t.relink()
+		changed := make(map[string]bool, len(change.Issues))
 		for i := range change.Issues { // pick up rebuilt ChildKeys
 			change.Issues[i] = t.issues[change.Issues[i].Key].issue
+			changed[change.Issues[i].Key] = true
+		}
+		// A ticket created under (or moved to) an epic does not change the
+		// epic's "updated" in Jira, so the epic is not in this sync; send it
+		// (and the old parent) anyway, or the tree never shows the new child.
+		for k, e := range t.issues {
+			if !changed[k] && !slices.Equal(before[k], e.issue.ChildKeys) {
+				change.Issues = append(change.Issues, e.issue)
+			}
 		}
 	}
 	t.lastSync = started

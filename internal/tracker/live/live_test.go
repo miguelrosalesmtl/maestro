@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
@@ -237,5 +238,29 @@ func TestRefreshPicksUpNewTickets(t *testing.T) {
 	}
 	if !has("PLAT-50") {
 		t.Fatal("Refresh must pick up a ticket created in Jira")
+	}
+}
+
+func TestTicketCreatedUnderAnEpicShowsUpInItsTree(t *testing.T) {
+	f := jiratest.New(t)
+	var changes []Change
+	tr := newTracker(t, f, func(c Change) { changes = append(changes, c) })
+
+	f.AddChild("PLAT-60", "Created under the epic in Jira", "PLAT-1")
+	changes = nil
+	if err := tr.incrementalSync(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]tracker.Issue{}
+	for _, c := range changes {
+		for _, is := range c.Issues {
+			got[is.Key] = is
+		}
+	}
+	if _, ok := got["PLAT-60"]; !ok {
+		t.Fatalf("the new ticket must be sent, got %v", got)
+	}
+	if epic, ok := got["PLAT-1"]; !ok || !slices.Contains(epic.ChildKeys, "PLAT-60") {
+		t.Fatalf("the epic must be sent with its new child, got %+v", got["PLAT-1"])
 	}
 }

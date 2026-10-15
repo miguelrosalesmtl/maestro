@@ -462,6 +462,15 @@ func (f *Server) Add(key, summary, status string) {
 	f.put(key, summary, "story", status, "", nil)
 }
 
+// AddChild creates a story under parent as if someone made it in Jira
+// (assigned to me); like Jira, the parent's "updated" does not change.
+func (f *Server) AddChild(key, summary, parent string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.put(key, summary, "story", "To Do", parent, nil)
+	f.recent[key] = true
+}
+
 // MarkRecent makes the next incremental search return key (unchanged).
 func (f *Server) MarkRecent(key string) {
 	f.mu.Lock()
